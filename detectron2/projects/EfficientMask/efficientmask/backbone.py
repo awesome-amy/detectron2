@@ -7,6 +7,7 @@ from detectron2.modeling import BACKBONE_REGISTRY, Backbone, ShapeSpec
 from .efficientdet.model import BiFPN, Regressor, Classifier, EfficientNet
 from .efficientdet.utils import Anchors
 
+__all__ = ["build_efficientnet_bifpn_backbone", "EfficientDetBackbone"]
 
 class EfficientDetBackbone(Backbone):
     def __init__(self, num_classes=80, compound_coef=0, load_weights=False, **kwargs):
