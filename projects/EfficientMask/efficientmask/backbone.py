@@ -3,11 +3,12 @@
 import torch
 from torch import nn
 
+from detectron2.modeling import BACKBONE_REGISTRY, Backbone, ShapeSpec
 from .efficientdet.model import BiFPN, Regressor, Classifier, EfficientNet
 from .efficientdet.utils import Anchors
 
 
-class EfficientDetBackbone(nn.Module):
+class EfficientDetBackbone(Backbone):
     def __init__(self, num_classes=80, compound_coef=0, load_weights=False, **kwargs):
         super(EfficientDetBackbone, self).__init__()
         self.compound_coef = compound_coef
@@ -34,7 +35,7 @@ class EfficientDetBackbone(nn.Module):
             8: [80, 224, 640],
         }
 
-        num_anchors = len(self.aspect_ratios) * self.num_scales
+        # num_anchors = len(self.aspect_ratios) * self.num_scales
 
         self.bifpn = nn.Sequential(
             *[BiFPN(self.fpn_num_filters[self.compound_coef],
@@ -45,17 +46,17 @@ class EfficientDetBackbone(nn.Module):
               for _ in range(self.fpn_cell_repeats[compound_coef])])
 
         self.num_classes = num_classes
-        self.regressor = Regressor(in_channels=self.fpn_num_filters[self.compound_coef], num_anchors=num_anchors,
-                                   num_layers=self.box_class_repeats[self.compound_coef],
-                                   pyramid_levels=self.pyramid_levels[self.compound_coef])
-        self.classifier = Classifier(in_channels=self.fpn_num_filters[self.compound_coef], num_anchors=num_anchors,
-                                     num_classes=num_classes,
-                                     num_layers=self.box_class_repeats[self.compound_coef],
-                                     pyramid_levels=self.pyramid_levels[self.compound_coef])
-
-        self.anchors = Anchors(anchor_scale=self.anchor_scale[compound_coef],
-                               pyramid_levels=(torch.arange(self.pyramid_levels[self.compound_coef]) + 3).tolist(),
-                               **kwargs)
+        # self.regressor = Regressor(in_channels=self.fpn_num_filters[self.compound_coef], num_anchors=num_anchors,
+        #                            num_layers=self.box_class_repeats[self.compound_coef],
+        #                            pyramid_levels=self.pyramid_levels[self.compound_coef])
+        # self.classifier = Classifier(in_channels=self.fpn_num_filters[self.compound_coef], num_anchors=num_anchors,
+        #                              num_classes=num_classes,
+        #                              num_layers=self.box_class_repeats[self.compound_coef],
+        #                              pyramid_levels=self.pyramid_levels[self.compound_coef])
+        #
+        # self.anchors = Anchors(anchor_scale=self.anchor_scale[compound_coef],
+        #                        pyramid_levels=(torch.arange(self.pyramid_levels[self.compound_coef]) + 3).tolist(),
+        #                        **kwargs)
 
         self.backbone_net = EfficientNet(self.backbone_compound_coef[compound_coef], load_weights)
 
@@ -72,11 +73,19 @@ class EfficientDetBackbone(nn.Module):
         features = (p3, p4, p5)
         features = self.bifpn(features)
 
-        regression = self.regressor(features)
-        classification = self.classifier(features)
-        anchors = self.anchors(inputs, inputs.dtype)
+        # regression = self.regressor(features)
+        # classification = self.classifier(features)
+        # anchors = self.anchors(inputs, inputs.dtype)
 
-        return features, regression, classification, anchors
+        # return features, regression, classification, anchors
+        # TODO: check if the output is in the desired shape
+        # Returns:
+        #     dict[str->Tensor]:
+        #         mapping from feature map name to FPN feature map tensor
+        #         in high to low resolution order. Returned feature names follow the FPN
+        #         paper convention: "p<stage>", where stage has stride = 2 ** stage e.g.,
+        #         ["p2", "p3", ..., "p6"].
+        return features
 
     def init_backbone(self, path):
         state_dict = torch.load(path)
@@ -85,3 +94,21 @@ class EfficientDetBackbone(nn.Module):
             print(ret)
         except RuntimeError as e:
             print('Ignoring ' + str(e) + '"')
+
+
+@BACKBONE_REGISTRY.register()
+def build_efficientnet_bifpn_backbone(cfg, input_shape):
+    """
+    Args:
+        cfg: a detectron2 CfgNode
+
+    Returns:
+        backbone (Backbone): backbone module, must be a subclass of :class:`Backbone`.
+    """
+    num_classes = cfg.MODEL.EFFICIENTDET.NUM_CLASSES
+    compound_coef = cfg.MODEL.EFFICIENTDET.COMPOUND_COEF
+    backbone = EfficientDetBackbone(
+        num_classes=num_classes,
+        compound_coef=compound_coef,
+        load_weights=False)
+    return backbone
