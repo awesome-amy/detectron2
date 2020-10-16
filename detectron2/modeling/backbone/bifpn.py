@@ -9,6 +9,8 @@ from .build import BACKBONE_REGISTRY, Backbone
 from .efficientdet.model import BiFPN, Regressor, Classifier, EfficientNet
 from .efficientdet.utils import Anchors
 
+from detectron2.config import CfgNode as CN
+
 __all__ = ["build_efficientnet_bifpn_backbone", "EfficientDetBackbone", "add_efficientnet_bifpn_config"]
 
 class EfficientDetBackbone(Backbone):
@@ -119,7 +121,8 @@ def build_efficientnet_bifpn_backbone(cfg, input_shape):
 
 def add_efficientnet_bifpn_config(cfg):
     """
-    Add config for PointRend.
+    Add config for efficientdet backbone.
     """
+    cfg.MODEL.EFFICIENTDET = CN()
     cfg.MODEL.EFFICIENTDET.NUM_CLASSES = 80
     cfg.MODEL.EFFICIENTDET.COMPOUND_COEF = 0
