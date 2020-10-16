@@ -2,8 +2,8 @@
 
 import torch
 from torch import nn
-
-from detectron2.modeling import BACKBONE_REGISTRY, Backbone, ShapeSpec
+from .build import BACKBONE_REGISTRY, Backbone
+# from detectron2.modeling import BACKBONE_REGISTRY, Backbone, ShapeSpec
 from .efficientdet.model import BiFPN, Regressor, Classifier, EfficientNet
 from .efficientdet.utils import Anchors
 
