@@ -9,7 +9,7 @@ from .build import BACKBONE_REGISTRY, Backbone
 from .efficientdet.model import BiFPN, Regressor, Classifier, EfficientNet
 from .efficientdet.utils import Anchors
 
-__all__ = ["build_efficientnet_bifpn_backbone", "EfficientDetBackbone"]
+__all__ = ["build_efficientnet_bifpn_backbone", "EfficientDetBackbone", "add_efficientnet_bifpn_config"]
 
 class EfficientDetBackbone(Backbone):
     def __init__(self, num_classes=80, compound_coef=0, load_weights=False, **kwargs):
@@ -115,3 +115,11 @@ def build_efficientnet_bifpn_backbone(cfg, input_shape):
         compound_coef=compound_coef,
         load_weights=False)
     return backbone
+
+
+def add_efficientnet_bifpn_config(cfg):
+    """
+    Add config for PointRend.
+    """
+    cfg.MODEL.EFFICIENTDET.NUM_CLASSES = 80
+    cfg.MODEL.EFFICIENTDET.COMPOUND_COEF = 0
