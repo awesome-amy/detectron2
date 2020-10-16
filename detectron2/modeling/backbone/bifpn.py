@@ -3,7 +3,7 @@
 import torch
 from torch import nn
 
-from .build import BACKBONE_REGISTRY, Backbone
+from .build import BACKBONE_REGISTRY, Backbone, ShapeSpec
 # from detectron2.modeling import BACKBONE_REGISTRY, Backbone, ShapeSpec
 
 from .efficientdet.model import BiFPN, Regressor, Classifier, EfficientNet
@@ -12,6 +12,7 @@ from .efficientdet.utils import Anchors
 from detectron2.config import CfgNode as CN
 
 __all__ = ["build_efficientnet_bifpn_backbone", "EfficientDetBackbone", "add_efficientnet_bifpn_config"]
+
 
 class EfficientDetBackbone(Backbone):
     def __init__(self, num_classes=80, compound_coef=0, load_weights=False, **kwargs):
@@ -82,14 +83,6 @@ class EfficientDetBackbone(Backbone):
         # classification = self.classifier(features)
         # anchors = self.anchors(inputs, inputs.dtype)
 
-        # return features, regression, classification, anchors
-        # TODO: check if the output is in the desired shape
-        # Returns:
-        #     dict[str->Tensor]:
-        #         mapping from feature map name to FPN feature map tensor
-        #         in high to low resolution order. Returned feature names follow the FPN
-        #         paper convention: "p<stage>", where stage has stride = 2 ** stage e.g.,
-        #         ["p2", "p3", ..., "p6"].
         return features
 
     def init_backbone(self, path):
@@ -99,6 +92,26 @@ class EfficientDetBackbone(Backbone):
             print(ret)
         except RuntimeError as e:
             print('Ignoring ' + str(e) + '"')
+
+    def output_shape(self):
+        """
+        Returns:
+            dict[str->ShapeSpec]
+        """
+        # return features, regression, classification, anchors
+        # TODO: check if the output is in the desired shape
+        # Returns:
+        #     dict[str->Tensor]:
+        #         mapping from feature map name to FPN feature map tensor
+        #         in high to low resolution order. Returned feature names follow the FPN
+        #         paper convention: "p<stage>", where stage has stride = 2 ** stage e.g.,
+        #         ["p2", "p3", ..., "p6"].
+        return {
+            name: ShapeSpec(
+                channels=self._out_feature_channels[name], stride=self._out_feature_strides[name]
+            )
+            for name in self._out_features
+        }
 
 
 @BACKBONE_REGISTRY.register()
