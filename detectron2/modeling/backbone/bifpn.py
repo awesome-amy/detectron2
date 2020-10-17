@@ -119,8 +119,8 @@ def build_efficientnet_bifpn_backbone(cfg, input_shape):
     Returns:
         backbone (Backbone): backbone module, must be a subclass of :class:`Backbone`.
     """
-    num_classes = cfg.MODEL.EFFICIENTDET.NUM_CLASSES
-    compound_coef = cfg.MODEL.EFFICIENTDET.COMPOUND_COEF
+    num_classes = cfg.MODEL.RETINANET.NUM_CLASSES
+    compound_coef = cfg.MODEL.EFFICIENTNET.COMPOUND_COEF
     backbone = EfficientDetBackbone(
         num_classes=num_classes,
         compound_coef=compound_coef,
@@ -132,6 +132,5 @@ def add_efficientnet_bifpn_config(cfg):
     """
     Add config for efficientdet backbone.
     """
-    cfg.MODEL.EFFICIENTDET = CN()
-    cfg.MODEL.EFFICIENTDET.NUM_CLASSES = 80
-    cfg.MODEL.EFFICIENTDET.COMPOUND_COEF = 0
+    cfg.MODEL.EFFICIENTNET = CN()
+    cfg.MODEL.EFFICIENTNET.COMPOUND_COEF = 0
