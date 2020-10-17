@@ -67,7 +67,8 @@ class EfficientDetBackbone(Backbone):
 
         # add attributes compatiable for default .out_shape()
         # Return feature names are "p<stage>", like ["p2", "p3", ..., "p6"]
-        for s in range(2, 7): # TODO: avoid hard-coding stage number
+        self._out_features_strides = {}
+        for s in range(2, 7):     # TODO: avoid hard-coding stage number
             self._out_feature_strides["p{}".format(s + 1)] = 2 ** (s + 1)
         self._out_features = list(self._out_feature_strides.keys())
         self._out_feature_channels = {k: self.fpn_num_filters[compound_coef] for k in self._out_features}
