@@ -1,5 +1,5 @@
 # Author: Zylo117
-
+import math
 import torch
 from torch import nn
 
@@ -63,8 +63,14 @@ class EfficientDetBackbone(Backbone):
         # self.anchors = Anchors(anchor_scale=self.anchor_scale[compound_coef],
         #                        pyramid_levels=(torch.arange(self.pyramid_levels[self.compound_coef]) + 3).tolist(),
         #                        **kwargs)
-
         self.backbone_net = EfficientNet(self.backbone_compound_coef[compound_coef], load_weights)
+
+        # add attributes compatiable for default .out_shape()
+        # Return feature names are "p<stage>", like ["p2", "p3", ..., "p6"]
+        for s in range(2, 7): # TODO: avoid hard-coding stage number
+            self._out_feature_strides["p{}".format(s + 1)] = 2 ** (s + 1)
+        self._out_features = list(self._out_feature_strides.keys())
+        self._out_feature_channels = {k: self.fpn_num_filters[compound_coef] for k in self._out_features}
 
     def freeze_bn(self):
         for m in self.modules():
@@ -72,6 +78,14 @@ class EfficientDetBackbone(Backbone):
                 m.eval()
 
     def forward(self, inputs):
+        """
+        Returns:
+            dict[str->Tensor]:
+                mapping from feature map name to FPN feature map tensor
+                in high to low resolution order. Returned feature names follow the FPN
+                paper convention: "p<stage>", where stage has stride = 2 ** stage e.g.,
+                ["p2", "p3", ..., "p6"].
+        """
         max_size = inputs.shape[-1]
 
         _, p3, p4, p5 = self.backbone_net(inputs)
@@ -83,7 +97,9 @@ class EfficientDetBackbone(Backbone):
         # classification = self.classifier(features)
         # anchors = self.anchors(inputs, inputs.dtype)
 
-        return features
+        # return features, regression, classification, anchors
+        assert len(self._out_features) == len(features)
+        return dict(zip(self._out_features, features))
 
     def init_backbone(self, path):
         state_dict = torch.load(path)
@@ -92,26 +108,6 @@ class EfficientDetBackbone(Backbone):
             print(ret)
         except RuntimeError as e:
             print('Ignoring ' + str(e) + '"')
-
-    def output_shape(self):
-        """
-        Returns:
-            dict[str->ShapeSpec]
-        """
-        # return features, regression, classification, anchors
-        # TODO: check if the output is in the desired shape
-        # Returns:
-        #     dict[str->Tensor]:
-        #         mapping from feature map name to FPN feature map tensor
-        #         in high to low resolution order. Returned feature names follow the FPN
-        #         paper convention: "p<stage>", where stage has stride = 2 ** stage e.g.,
-        #         ["p2", "p3", ..., "p6"].
-        return {
-            name: ShapeSpec(
-                channels=self._out_feature_channels[name], stride=self._out_feature_strides[name]
-            )
-            for name in self._out_features
-        }
 
 
 @BACKBONE_REGISTRY.register()
