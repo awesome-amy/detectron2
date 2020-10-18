@@ -242,5 +242,4 @@ def build_retinanet_resnet_fpn_backbone(cfg, input_shape: ShapeSpec):
         top_block=LastLevelP6P7(in_channels_p6p7, out_channels),
         fuse_type=cfg.MODEL.FPN.FUSE_TYPE,
     )
-    print(backbone.output_shape())
     return backbone
