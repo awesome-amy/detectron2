@@ -67,7 +67,7 @@ class PaddingTransform(NoOpTransform):
 
         # ret = Image.new("RGB", (self.new_h, self.new_w))
         # ret.paste(img, box=(0, 0, self.h, self.w))
-        return np.pad(img, ((0, self.d_h), (0, self.d_w)))
+        return np.pad(img, ((0, self.d_h), (0, self.d_w), (0, 0)))
 
 
 class ResizeWithPadding(Augmentation):
