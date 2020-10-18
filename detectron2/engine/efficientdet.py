@@ -62,6 +62,7 @@ class ResizeWithPadding(Augmentation):
             interp: PIL interpolation method
         """
         self.shape = shape
+        self.interp = interp
 
     def get_transform(self, image):
         height, width, _ = image.shape
@@ -143,7 +144,9 @@ class Predictor:
                 # whether the model expects BGR inputs or RGB
                 original_image = original_image[:, :, ::-1]
             height, width = original_image.shape[:2]
+            print(height, width)
             image = self.aug.get_transform(original_image).apply_image(original_image)
+            print(image.shape)
             image = torch.as_tensor(image.astype("float32").transpose(2, 0, 1))
 
             inputs = {"image": image, "height": height, "width": width}
