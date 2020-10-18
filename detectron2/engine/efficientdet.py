@@ -91,7 +91,7 @@ class ResizeWithPadding(Augmentation):
         return TransformList[ResizeTransform(
             image.shape[0], image.shape[1], resized_height, resized_width, self.interp
         ), PaddingTransform(
-            image.shape[0], image.shape[1], self.shape[0], self.shape[1]
+            image.shape[0], image.shape[1], self.shape, self.shape
         )]
 
 
