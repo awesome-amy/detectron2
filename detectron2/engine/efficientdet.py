@@ -70,15 +70,12 @@ class PaddingTransform(NoOpTransform):
 class ResizeWithPadding(Augmentation):
     """ Resize image to a fixed target size"""
 
-    def __init__(self, shape, interp=Image.BILINEAR):
+    def __init__(self, shape: int, interp=Image.BILINEAR):
         """
         Args:
-            shape: (h, w) tuple or a int
+            shape: int
             interp: PIL interpolation method
         """
-        if isinstance(shape, int):
-            shape = (shape, shape)
-        shape = tuple(shape)
         self._init(locals())
 
     def get_transform(self, image):
