@@ -50,7 +50,7 @@ from fvcore.transforms.transform import Transform
 from . import hooks
 from .train_loop import SimpleTrainer
 
-__all__ = ["ResizeWithPadding", "Predictor", "Trainer"]
+__all__ = ["PaddingTransform", "ResizeWithPadding", "Predictor", "Trainer"]
 
 
 class PaddingTransform(NoOpTransform):
