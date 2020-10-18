@@ -88,11 +88,12 @@ class ResizeWithPadding(Augmentation):
             scale = self.shape / width
             resized_height = int(height * scale)
             resized_width = self.shape
-        return TransformList[ResizeTransform(
+        print(self.shape, image.shape[0], image.shape[1])
+        return TransformList([ResizeTransform(
             image.shape[0], image.shape[1], resized_height, resized_width, self.interp
         ), PaddingTransform(
             image.shape[0], image.shape[1], self.shape, self.shape
-        )]
+        )])
 
 
 class Predictor:
@@ -155,7 +156,6 @@ class Predictor:
                 # whether the model expects BGR inputs or RGB
                 original_image = original_image[:, :, ::-1]
             height, width = original_image.shape[:2]
-            print(height, width)
             image = self.aug.get_transform(original_image).apply_image(original_image)
             print(image.shape)
             image = torch.as_tensor(image.astype("float32").transpose(2, 0, 1))
