@@ -43,13 +43,28 @@ from detectron2.utils.logger import setup_logger
 from detectron2.engine.defaults import default_argument_parser, default_setup, DefaultTrainer, DefaultPredictor
 
 from detectron2.data.transforms.augmentation import Augmentation
-from detectron2.data.transforms.transform import ResizeTransform
+from detectron2.data.transforms.augmentation_impl import ResizeShortestEdge
+from detectron2.data.transforms.transform import ResizeTransform, TransformList, NoOpTransform
 from PIL import Image
-
+from fvcore.transforms.transform import Transform
 from . import hooks
 from .train_loop import SimpleTrainer
 
 __all__ = ["ResizeWithPadding", "Predictor", "Trainer"]
+
+
+class PaddingTransform(NoOpTransform):
+    """
+        given
+    """
+    def __init__(self, h, w, new_h, new_w):
+        super().__init__()
+        self._set_attributes(locals())
+
+    def apply_image(self, img: np.ndarray) -> np.ndarray:
+        ret = Image.new("RGB", (self.new_h, self.new_w))
+        ret.paste(img)
+        return ret
 
 
 class ResizeWithPadding(Augmentation):
@@ -58,11 +73,13 @@ class ResizeWithPadding(Augmentation):
     def __init__(self, shape, interp=Image.BILINEAR):
         """
         Args:
-            shape: int
+            shape: (h, w) tuple or a int
             interp: PIL interpolation method
         """
-        self.shape = shape
-        self.interp = interp
+        if isinstance(shape, int):
+            shape = (shape, shape)
+        shape = tuple(shape)
+        self._init(locals())
 
     def get_transform(self, image):
         height, width, _ = image.shape
@@ -74,14 +91,11 @@ class ResizeWithPadding(Augmentation):
             scale = self.shape / width
             resized_height = int(height * scale)
             resized_width = self.shape
-
-        scaled = ResizeTransform(
-            height, width, resized_height, resized_width, self.interp
-        )
-        scaled_and_padded = np.zeros((self.shape, self.shape, 3))
-        scaled_and_padded[0:resized_height, 0:resized_width] = scaled
-
-        return torch.from_numpy(scaled_and_padded).to(torch.float32)
+        return TransformList[ResizeTransform(
+            image.shape[0], image.shape[1], resized_height, resized_width, self.interp
+        ), PaddingTransform(
+            image.shape[0], image.shape[1], self.shape[0], self.shape[1]
+        )]
 
 
 class Predictor:
@@ -120,10 +134,9 @@ class Predictor:
         checkpointer = DetectionCheckpointer(self.model)
         checkpointer.load(cfg.MODEL.WEIGHTS)
 
-        self.aug = ResizeWithPadding(cfg.INPUT.MIN_SIZE_TEST)
-        # self.aug = T.ResizeShortestEdge(
-        #     [cfg.INPUT.MIN_SIZE_TEST, cfg.INPUT.MIN_SIZE_TEST], cfg.INPUT.MAX_SIZE_TEST
-        # )
+        self.aug = T.ResizeShortestEdge(
+            [cfg.INPUT.MIN_SIZE_TEST, cfg.INPUT.MIN_SIZE_TEST], cfg.INPUT.MAX_SIZE_TEST
+        )
 
         self.input_format = cfg.INPUT.FORMAT
         assert self.input_format in ["RGB", "BGR"], self.input_format
