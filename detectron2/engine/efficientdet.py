@@ -63,7 +63,7 @@ class PaddingTransform(NoOpTransform):
 
     def apply_image(self, img: np.ndarray) -> np.ndarray:
         ret = Image.new("RGB", (self.new_h, self.new_w))
-        ret.paste(img)
+        ret.paste(img, box=(0, 0))
         return ret
 
 
