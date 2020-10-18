@@ -57,16 +57,17 @@ class PaddingTransform(NoOpTransform):
     """
         given
     """
-    def __init__(self, h, w, new_h, new_w):
+    def __init__(self, d_h, d_w):
         super().__init__()
         self._set_attributes(locals())
 
     def apply_image(self, img: np.ndarray) -> np.ndarray:
-        print("----BEFORE padding: h, w, target_h, target_w-------")
-        print(self.h, self.w, self.new_h, self.new_w)
-        ret = Image.new("RGB", (self.new_h, self.new_w))
-        ret.paste(img, box=(0, 0, self.h, self.w))
-        return ret
+        print("----BEFORE padding: d_h, d_w-------")
+        print(img.shape, self.d_h, self.d_w)
+
+        # ret = Image.new("RGB", (self.new_h, self.new_w))
+        # ret.paste(img, box=(0, 0, self.h, self.w))
+        return np.pad(img, ((0, self.d_h), (0, self.d_w)))
 
 
 class ResizeWithPadding(Augmentation):
@@ -90,12 +91,15 @@ class ResizeWithPadding(Augmentation):
             scale = self.shape / width
             resized_height = int(height * scale)
             resized_width = self.shape
-        print("----BEFORE RESIZE: h, w, target_h, target_w---------")
-        print(image.shape[0], image.shape[1], self.shape, self.shape)
+
+        padding_height = self.shape - resized_height
+        padding_width = self.shape - resized_width
+        print("----BEFORE RESIZE: image.shape, resized_height, resized_width---------")
+        print(image.shape, resized_height, resized_width)
         return TransformList([ResizeTransform(
             image.shape[0], image.shape[1], resized_height, resized_width, self.interp
         ), PaddingTransform(
-            image.shape[0], image.shape[1], self.shape, self.shape
+            padding_height, padding_width
         )])
 
 
@@ -161,7 +165,8 @@ class Predictor:
             height, width = original_image.shape[:2]
             image = self.aug.get_transform(original_image).apply_image(original_image)
             print("------------AFTER transform: h, w-------------")
-            print(image.shape[0], image.shape[1])
+            print(image.shape)
+            print(image)
             image = torch.as_tensor(image.astype("float32").transpose(2, 0, 1))
 
             inputs = {"image": image, "height": height, "width": width}
