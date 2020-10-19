@@ -277,7 +277,9 @@ class Trainer(DefaultTrainer):
         Overwrite it if you'd like a different data loader.
         """
         if "build_efficientnet_bifpn_backbone" in cfg.MODEL.BACKBONE.NAME:
-            mapper = DatasetMapper(cfg, is_train=True, augmentations=ResizeWithPadding(cfg.INPUT.MIN_SIZE_TRAIN))
+            mapper = DatasetMapper(cfg, is_train=True, augmentations=[
+                ResizeWithPadding(cfg.INPUT.MIN_SIZE_TRAIN)
+            ])
         else:
             mapper = None
         return build_detection_train_loader(cfg, mapper=mapper)
@@ -292,7 +294,9 @@ class Trainer(DefaultTrainer):
         Overwrite it if you'd like a different data loader.
         """
         if "build_efficientnet_bifpn_backbone" in cfg.MODEL.BACKBONE.NAME:
-            mapper = DatasetMapper(cfg, is_train=True, augmentations=ResizeWithPadding(cfg.INPUT.MIN_SIZE_TEST))
+            mapper = DatasetMapper(cfg, is_train=True, augmentations=[
+                ResizeWithPadding(cfg.INPUT.MIN_SIZE_TEST)
+            ])
         else:
             mapper = None
         return build_detection_test_loader(cfg, dataset_name, mapper=mapper)
