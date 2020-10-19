@@ -20,6 +20,7 @@ from fvcore.common.file_io import PathManager
 from fvcore.nn.precise_bn import get_bn_modules
 from torch.nn.parallel import DistributedDataParallel
 
+from detectron2.data import DatasetMapper
 import detectron2.data.transforms as T
 from detectron2.checkpoint import DetectionCheckpointer
 from detectron2.data import (
@@ -31,6 +32,17 @@ from detectron2.evaluation import (
     DatasetEvaluator,
     inference_on_dataset,
     print_csv_format,
+    verify_results,
+)
+from detectron2.evaluation import (
+    CityscapesInstanceEvaluator,
+    CityscapesSemSegEvaluator,
+    COCOEvaluator,
+    COCOPanopticEvaluator,
+    DatasetEvaluators,
+    LVISEvaluator,
+    PascalVOCDetectionEvaluator,
+    SemSegEvaluator,
     verify_results,
 )
 from detectron2.modeling import build_model
@@ -50,12 +62,18 @@ from fvcore.transforms.transform import Transform
 from . import hooks
 from .train_loop import SimpleTrainer
 
-__all__ = ["PaddingTransform", "ResizeWithPadding", "Predictor", "Trainer"]
+__all__ = ["build_efficientnet_backbone_train_aug", "PaddingTransform", "ResizeWithPadding", "Predictor", "Trainer"]
+
+
+def build_efficientnet_backbone_train_aug(cfg):
+    augs = [ResizeWithPadding(cfg.INPUT.MIN_SIZE_TRAIN)]
+    return augs
 
 
 class PaddingTransform(NoOpTransform):
     """
-        given
+        Pad an image at the bottom with d_h rows of zeros
+        and to the right with d_w columns of zeros.
     """
     def __init__(self, d_h, d_w):
         super().__init__()
@@ -66,8 +84,10 @@ class PaddingTransform(NoOpTransform):
 
 
 class ResizeWithPadding(Augmentation):
-    """ Resize image to a fixed target size"""
-
+    """
+    Resize image with the longest edge to a fixed target size
+    and pad to square with zeros
+    """
     def __init__(self, shape: int, interp=Image.BILINEAR):
         """
         Args:
@@ -247,147 +267,6 @@ class Trainer(DefaultTrainer):
 
         self.register_hooks(self.build_hooks())
 
-    def resume_or_load(self, resume=True):
-        """
-        If `resume==True`, and last checkpoint exists, resume from it, load all checkpointables
-        (eg. optimizer and scheduler) and update iteration counter from it. ``cfg.MODEL.WEIGHTS``
-        will not be used.
-
-        Otherwise, load the model specified by the config (skip all checkpointables) and start from
-        the first iteration.
-
-        Args:
-            resume (bool): whether to do resume or not
-        """
-        checkpoint = self.checkpointer.resume_or_load(self.cfg.MODEL.WEIGHTS, resume=resume)
-        if resume and self.checkpointer.has_checkpoint():
-            self.start_iter = checkpoint.get("iteration", -1) + 1
-            # The checkpoint stores the training iteration that just finished, thus we start
-            # at the next iteration (or iter zero if there's no checkpoint).
-
-    def build_hooks(self):
-        """
-        Build a list of default hooks, including timing, evaluation,
-        checkpointing, lr scheduling, precise BN, writing events.
-
-        Returns:
-            list[HookBase]:
-        """
-        cfg = self.cfg.clone()
-        cfg.defrost()
-        cfg.DATALOADER.NUM_WORKERS = 0  # save some memory and time for PreciseBN
-
-        ret = [
-            hooks.IterationTimer(),
-            hooks.LRScheduler(self.optimizer, self.scheduler),
-            hooks.PreciseBN(
-                # Run at the same freq as (but before) evaluation.
-                cfg.TEST.EVAL_PERIOD,
-                self.model,
-                # Build a new data loader to not affect training
-                self.build_train_loader(cfg),
-                cfg.TEST.PRECISE_BN.NUM_ITER,
-            )
-            if cfg.TEST.PRECISE_BN.ENABLED and get_bn_modules(self.model)
-            else None,
-        ]
-
-        # Do PreciseBN before checkpointer, because it updates the model and need to
-        # be saved by checkpointer.
-        # This is not always the best: if checkpointing has a different frequency,
-        # some checkpoints may have more precise statistics than others.
-        if comm.is_main_process():
-            ret.append(hooks.PeriodicCheckpointer(self.checkpointer, cfg.SOLVER.CHECKPOINT_PERIOD))
-
-        def test_and_save_results():
-            self._last_eval_results = self.test(self.cfg, self.model)
-            return self._last_eval_results
-
-        # Do evaluation after checkpointer, because then if it fails,
-        # we can use the saved checkpoint to debug.
-        ret.append(hooks.EvalHook(cfg.TEST.EVAL_PERIOD, test_and_save_results))
-
-        if comm.is_main_process():
-            # run writers in the end, so that evaluation metrics are written
-            ret.append(hooks.PeriodicWriter(self.build_writers(), period=20))
-        return ret
-
-    def build_writers(self):
-        """
-        Build a list of writers to be used. By default it contains
-        writers that write metrics to the screen,
-        a json file, and a tensorboard event file respectively.
-        If you'd like a different list of writers, you can overwrite it in
-        your trainer.
-
-        Returns:
-            list[EventWriter]: a list of :class:`EventWriter` objects.
-
-        It is now implemented by:
-        ::
-            return [
-                CommonMetricPrinter(self.max_iter),
-                JSONWriter(os.path.join(self.cfg.OUTPUT_DIR, "metrics.json")),
-                TensorboardXWriter(self.cfg.OUTPUT_DIR),
-            ]
-
-        """
-        # Here the default print/log frequency of each writer is used.
-        return [
-            # It may not always print what you want to see, since it prints "common" metrics only.
-            CommonMetricPrinter(self.max_iter),
-            JSONWriter(os.path.join(self.cfg.OUTPUT_DIR, "metrics.json")),
-            TensorboardXWriter(self.cfg.OUTPUT_DIR),
-        ]
-
-    def train(self):
-        """
-        Run training.
-
-        Returns:
-            OrderedDict of results, if evaluation is enabled. Otherwise None.
-        """
-        super().train(self.start_iter, self.max_iter)
-        if len(self.cfg.TEST.EXPECTED_RESULTS) and comm.is_main_process():
-            assert hasattr(
-                self, "_last_eval_results"
-            ), "No evaluation results obtained during training!"
-            verify_results(self.cfg, self._last_eval_results)
-            return self._last_eval_results
-
-    @classmethod
-    def build_model(cls, cfg):
-        """
-        Returns:
-            torch.nn.Module:
-
-        It now calls :func:`detectron2.modeling.build_model`.
-        Overwrite it if you'd like a different model.
-        """
-        model = build_model(cfg)
-        logger = logging.getLogger(__name__)
-        logger.info("Model:\n{}".format(model))
-        return model
-
-    @classmethod
-    def build_optimizer(cls, cfg, model):
-        """
-        Returns:
-            torch.optim.Optimizer:
-
-        It now calls :func:`detectron2.solver.build_optimizer`.
-        Overwrite it if you'd like a different optimizer.
-        """
-        return build_optimizer(cfg, model)
-
-    @classmethod
-    def build_lr_scheduler(cls, cfg, optimizer):
-        """
-        It now calls :func:`detectron2.solver.build_lr_scheduler`.
-        Overwrite it if you'd like a different scheduler.
-        """
-        return build_lr_scheduler(cfg, optimizer)
-
     @classmethod
     def build_train_loader(cls, cfg):
         """
@@ -397,7 +276,11 @@ class Trainer(DefaultTrainer):
         It now calls :func:`detectron2.data.build_detection_train_loader`.
         Overwrite it if you'd like a different data loader.
         """
-        return build_detection_train_loader(cfg)
+        if "build_efficientnet_bifpn_backbone" in cfg.MODEL.BACKBONE.NAME:
+            mapper = DatasetMapper(cfg, is_train=True, augmentations=ResizeWithPadding(cfg.INPUT.MIN_SIZE_TRAIN))
+        else:
+            mapper = None
+        return build_detection_train_loader(cfg, mapper=mapper)
 
     @classmethod
     def build_test_loader(cls, cfg, dataset_name):
@@ -408,144 +291,58 @@ class Trainer(DefaultTrainer):
         It now calls :func:`detectron2.data.build_detection_test_loader`.
         Overwrite it if you'd like a different data loader.
         """
-        return build_detection_test_loader(cfg, dataset_name)
+        if "build_efficientnet_bifpn_backbone" in cfg.MODEL.BACKBONE.NAME:
+            mapper = DatasetMapper(cfg, is_train=True, augmentations=ResizeWithPadding(cfg.INPUT.MIN_SIZE_TEST))
+        else:
+            mapper = None
+        return build_detection_test_loader(cfg, dataset_name, mapper=mapper)
 
     @classmethod
-    def build_evaluator(cls, cfg, dataset_name):
+    def build_evaluator(cls, cfg, dataset_name, output_folder=None):
         """
-        Returns:
-            DatasetEvaluator or None
-
-        It is not implemented by default.
+        Create evaluator(s) for a given dataset.
+        This uses the special metadata "evaluator_type" associated with each builtin dataset.
+        For your own dataset, you can simply create an evaluator manually in your
+        script and do not have to worry about the hacky if-else logic here.
         """
-        raise NotImplementedError(
-            """
-If you want DefaultTrainer to automatically run evaluation,
-please implement `build_evaluator()` in subclasses (see train_net.py for example).
-Alternatively, you can call evaluation functions yourself (see Colab balloon tutorial for example).
-"""
-        )
-
-    @classmethod
-    def test(cls, cfg, model, evaluators=None):
-        """
-        Args:
-            cfg (CfgNode):
-            model (nn.Module):
-            evaluators (list[DatasetEvaluator] or None): if None, will call
-                :meth:`build_evaluator`. Otherwise, must have the same length as
-                ``cfg.DATASETS.TEST``.
-
-        Returns:
-            dict: a dict of result metrics
-        """
-        logger = logging.getLogger(__name__)
-        if isinstance(evaluators, DatasetEvaluator):
-            evaluators = [evaluators]
-        if evaluators is not None:
-            assert len(cfg.DATASETS.TEST) == len(evaluators), "{} != {}".format(
-                len(cfg.DATASETS.TEST), len(evaluators)
-            )
-
-        results = OrderedDict()
-        for idx, dataset_name in enumerate(cfg.DATASETS.TEST):
-            data_loader = cls.build_test_loader(cfg, dataset_name)
-            # When evaluators are passed in as arguments,
-            # implicitly assume that evaluators can be created before data_loader.
-            if evaluators is not None:
-                evaluator = evaluators[idx]
-            else:
-                try:
-                    evaluator = cls.build_evaluator(cfg, dataset_name)
-                except NotImplementedError:
-                    logger.warn(
-                        "No evaluator found. Use `DefaultTrainer.test(evaluators=)`, "
-                        "or implement its `build_evaluator` method."
-                    )
-                    results[dataset_name] = {}
-                    continue
-            results_i = inference_on_dataset(model, data_loader, evaluator)
-            results[dataset_name] = results_i
-            if comm.is_main_process():
-                assert isinstance(
-                    results_i, dict
-                ), "Evaluator must return a dict on the main process. Got {} instead.".format(
-                    results_i
+        if output_folder is None:
+            output_folder = os.path.join(cfg.OUTPUT_DIR, "inference")
+        evaluator_list = []
+        evaluator_type = MetadataCatalog.get(dataset_name).evaluator_type
+        if evaluator_type in ["sem_seg", "coco_panoptic_seg"]:
+            evaluator_list.append(
+                SemSegEvaluator(
+                    dataset_name,
+                    distributed=True,
+                    num_classes=cfg.MODEL.SEM_SEG_HEAD.NUM_CLASSES,
+                    ignore_label=cfg.MODEL.SEM_SEG_HEAD.IGNORE_VALUE,
+                    output_dir=output_folder,
                 )
-                logger.info("Evaluation results for {} in csv format:".format(dataset_name))
-                print_csv_format(results_i)
-
-        if len(results) == 1:
-            results = list(results.values())[0]
-        return results
-
-    @staticmethod
-    def auto_scale_workers(cfg, num_workers: int):
-        """
-        When the config is defined for certain number of workers (according to
-        ``cfg.SOLVER.REFERENCE_WORLD_SIZE``) that's different from the number of
-        workers currently in use, returns a new cfg where the total batch size
-        is scaled so that the per-GPU batch size stays the same as the
-        original ``IMS_PER_BATCH // REFERENCE_WORLD_SIZE``.
-
-        Other config options are also scaled accordingly:
-        * training steps and warmup steps are scaled inverse proportionally.
-        * learning rate are scaled proportionally, following :paper:`ImageNet in 1h`.
-
-        For example, with the original config like the following:
-
-        .. code-block:: yaml
-
-            IMS_PER_BATCH: 16
-            BASE_LR: 0.1
-            REFERENCE_WORLD_SIZE: 8
-            MAX_ITER: 5000
-            STEPS: (4000,)
-            CHECKPOINT_PERIOD: 1000
-
-        When this config is used on 16 GPUs instead of the reference number 8,
-        calling this method will return a new config with:
-
-        .. code-block:: yaml
-
-            IMS_PER_BATCH: 32
-            BASE_LR: 0.2
-            REFERENCE_WORLD_SIZE: 16
-            MAX_ITER: 2500
-            STEPS: (2000,)
-            CHECKPOINT_PERIOD: 500
-
-        Note that both the original config and this new config can be trained on 16 GPUs.
-        It's up to user whether to enable this feature (by setting ``REFERENCE_WORLD_SIZE``).
-
-        Returns:
-            CfgNode: a new config. Same as original if ``cfg.SOLVER.REFERENCE_WORLD_SIZE==0``.
-        """
-        old_world_size = cfg.SOLVER.REFERENCE_WORLD_SIZE
-        if old_world_size == 0 or old_world_size == num_workers:
-            return cfg
-        cfg = cfg.clone()
-        frozen = cfg.is_frozen()
-        cfg.defrost()
-
-        assert (
-            cfg.SOLVER.IMS_PER_BATCH % old_world_size == 0
-        ), "Invalid REFERENCE_WORLD_SIZE in config!"
-        scale = num_workers / old_world_size
-        bs = cfg.SOLVER.IMS_PER_BATCH = int(round(cfg.SOLVER.IMS_PER_BATCH * scale))
-        lr = cfg.SOLVER.BASE_LR = cfg.SOLVER.BASE_LR * scale
-        max_iter = cfg.SOLVER.MAX_ITER = int(round(cfg.SOLVER.MAX_ITER / scale))
-        warmup_iter = cfg.SOLVER.WARMUP_ITERS = int(round(cfg.SOLVER.WARMUP_ITERS / scale))
-        cfg.SOLVER.STEPS = tuple(int(round(s / scale)) for s in cfg.SOLVER.STEPS)
-        cfg.TEST.EVAL_PERIOD = int(round(cfg.TEST.EVAL_PERIOD / scale))
-        cfg.SOLVER.CHECKPOINT_PERIOD = int(round(cfg.SOLVER.CHECKPOINT_PERIOD / scale))
-        cfg.SOLVER.REFERENCE_WORLD_SIZE = num_workers  # maintain invariant
-        logger = logging.getLogger(__name__)
-        logger.info(
-            f"Auto-scaling the config to batch_size={bs}, learning_rate={lr}, "
-            f"max_iter={max_iter}, warmup={warmup_iter}."
-        )
-
-        if frozen:
-            cfg.freeze()
-        return cfg
+            )
+        if evaluator_type in ["coco", "coco_panoptic_seg"]:
+            evaluator_list.append(COCOEvaluator(dataset_name, cfg, True, output_folder))
+        if evaluator_type == "coco_panoptic_seg":
+            evaluator_list.append(COCOPanopticEvaluator(dataset_name, output_folder))
+        if evaluator_type == "cityscapes_instance":
+            assert (
+                torch.cuda.device_count() >= comm.get_rank()
+            ), "CityscapesEvaluator currently do not work with multiple machines."
+            return CityscapesInstanceEvaluator(dataset_name)
+        if evaluator_type == "cityscapes_sem_seg":
+            assert (
+                torch.cuda.device_count() >= comm.get_rank()
+            ), "CityscapesEvaluator currently do not work with multiple machines."
+            return CityscapesSemSegEvaluator(dataset_name)
+        elif evaluator_type == "pascal_voc":
+            return PascalVOCDetectionEvaluator(dataset_name)
+        elif evaluator_type == "lvis":
+            return LVISEvaluator(dataset_name, cfg, True, output_folder)
+        if len(evaluator_list) == 0:
+            raise NotImplementedError(
+                "no Evaluator for the dataset {} with the type {}".format(
+                    dataset_name, evaluator_type
+                )
+            )
+        elif len(evaluator_list) == 1:
+            return evaluator_list[0]
+        return DatasetEvaluators(evaluator_list)
