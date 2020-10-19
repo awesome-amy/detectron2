@@ -148,11 +148,6 @@ class RetinaNet(nn.Module):
         """
         images = self.preprocess_image(batched_inputs)
         features = self.backbone(images.tensor)
-        print("--------START OUTPUT OF BACKBONE----------------")
-        for name, tensor in features.items():
-            print(name)
-            print(tensor.size())
-        print("----------END OUTPUT OF BACKBONE----------------")
         features = [features[f] for f in self.in_features]
 
         anchors = self.anchor_generator(features)
