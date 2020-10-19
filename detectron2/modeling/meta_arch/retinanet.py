@@ -77,14 +77,11 @@ def detector_postprocess(results, output_height, output_width, mask_threshold=0.
     else:
         results_height = int(results.image_size[1] * output_height_tmp / output_width_tmp)
         results_width = results.image_size[1]
-    print("-------resized image without padding height and weight-----")
-    print(results_height, results_width)
+
     scale_x, scale_y = (
         output_width_tmp / results_width,
         output_height_tmp / results_height,
     )
-    print("-------scales for resizing-----")
-    print(scale_x, scale_y)
     results = Instances((output_height, output_width), **results.get_fields())
 
     if results.has("pred_boxes"):
@@ -256,8 +253,6 @@ class RetinaNet(nn.Module):
             ):
                 height = input_per_image.get("height", image_size[0])
                 width = input_per_image.get("width", image_size[1])
-                print("-----intended original height and width------")
-                print(height, width)
                 r = detector_postprocess(results_per_image, height, width)
                 processed_results.append({"instances": r})
             return processed_results
