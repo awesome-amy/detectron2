@@ -73,9 +73,9 @@ def detector_postprocess(results, output_height, output_width, mask_threshold=0.
 
     if output_height_tmp > output_width_tmp:
         results_height = results.image_size[0]
-        results_width = results.image_size[1] - int(results.image_size[0] * output_width_tmp / output_height_tmp)
+        results_width = int(results.image_size[0] * output_width_tmp / output_height_tmp)
     else:
-        results_height = results.image_size[0] - int(results.image_size[1] * output_height_tmp / output_width_tmp)
+        results_height = int(results.image_size[1] * output_height_tmp / output_width_tmp)
         results_width = results.image_size[1]
     print("-------resized image without padding height and weight-----")
     print(results_height, results_width)
