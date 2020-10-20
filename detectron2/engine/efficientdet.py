@@ -62,12 +62,7 @@ from fvcore.transforms.transform import Transform
 from . import hooks
 from .train_loop import SimpleTrainer
 
-__all__ = ["build_efficientnet_backbone_train_aug", "PaddingTransform", "ResizeWithPadding", "Predictor", "Trainer"]
-
-
-def build_efficientnet_backbone_train_aug(cfg):
-    augs = [ResizeWithPadding(cfg.INPUT.MIN_SIZE_TRAIN)]
-    return augs
+__all__ = ["PaddingTransform", "ResizeWithPadding", "Predictor", "Trainer"]
 
 
 class PaddingTransform(NoOpTransform):
