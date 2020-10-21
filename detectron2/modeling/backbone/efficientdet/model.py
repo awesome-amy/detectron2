@@ -367,12 +367,12 @@ class Regressor(nn.Module):
                 feat = self.swish(feat)
             feat = self.header(feat)
 
-            feat = feat.permute(0, 2, 3, 1)
-            feat = feat.contiguous().view(feat.shape[0], -1, 4)
+            # feat = feat.permute(0, 2, 3, 1)
+            # feat = feat.contiguous().view(feat.shape[0], -1, 4)
 
             feats.append(feat)
 
-        feats = torch.cat(feats, dim=1)
+        # feats = torch.cat(feats, dim=1)
 
         return feats
 
@@ -404,15 +404,15 @@ class Classifier(nn.Module):
                 feat = self.swish(feat)
             feat = self.header(feat)
 
-            feat = feat.permute(0, 2, 3, 1)
-            feat = feat.contiguous().view(feat.shape[0], feat.shape[1], feat.shape[2], self.num_anchors,
-                                          self.num_classes)
-            feat = feat.contiguous().view(feat.shape[0], -1, self.num_classes)
+            # feat = feat.permute(0, 2, 3, 1)
+            # feat = feat.contiguous().view(feat.shape[0], feat.shape[1], feat.shape[2], self.num_anchors,
+            #                               self.num_classes)
+            # feat = feat.contiguous().view(feat.shape[0], -1, self.num_classes)
 
             feats.append(feat)
 
-        feats = torch.cat(feats, dim=1)
-        feats = feats.sigmoid()
+        # feats = torch.cat(feats, dim=1)
+        # feats = feats.sigmoid()
 
         return feats
 

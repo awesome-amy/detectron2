@@ -150,15 +150,15 @@ class RetinaNet(nn.Module):
         backbone_shape = self.backbone.output_shape()
         feature_shapes = [backbone_shape[f] for f in self.in_features]
 
-        self.head = RetinaNetHead(cfg, feature_shapes)
-        # num_anchors = len(self.aspect_ratios) * self.num_scales
-        # self.regressor = Regressor(in_channels=self.fpn_num_filters[self.compound_coef], num_anchors=num_anchors,
-        #                            num_layers=self.box_class_repeats[self.compound_coef],
-        #                            pyramid_levels=self.pyramid_levels[self.compound_coef])
-        # self.classifier = Classifier(in_channels=self.fpn_num_filters[self.compound_coef], num_anchors=num_anchors,
-        #                              num_classes=self.num_classes,
-        #                              num_layers=self.box_class_repeats[self.compound_coef],
-        #                              pyramid_levels=self.pyramid_levels[self.compound_coef])
+        # self.head = RetinaNetHead(cfg, feature_shapes)
+        num_anchors = len(self.aspect_ratios) * self.num_scales
+        self.regressor = Regressor(in_channels=self.fpn_num_filters[self.compound_coef], num_anchors=num_anchors,
+                                   num_layers=self.box_class_repeats[self.compound_coef],
+                                   pyramid_levels=self.pyramid_levels[self.compound_coef])
+        self.classifier = Classifier(in_channels=self.fpn_num_filters[self.compound_coef], num_anchors=num_anchors,
+                                     num_classes=self.num_classes,
+                                     num_layers=self.box_class_repeats[self.compound_coef],
+                                     pyramid_levels=self.pyramid_levels[self.compound_coef])
 
         self.anchor_generator = build_anchor_generator(cfg, feature_shapes)
 
@@ -244,19 +244,10 @@ class RetinaNet(nn.Module):
         features = [features[f] for f in self.in_features]
 
         anchors = self.anchor_generator(features)
-        pred_logits, pred_anchor_deltas = self.head(features)
-        # pred_anchor_deltas = self.regressor(features)
-        # pred_logits = self.classifier(features)
+        # pred_logits, pred_anchor_deltas = self.head(features)
+        pred_anchor_deltas = self.regressor(features)
+        pred_logits = self.classifier(features)
         # Transpose the Hi*Wi*A dimension to the middle:
-
-        print("----------pred_logits-----------------")
-        for feat in pred_logits:
-            print(feat.size())
-
-        print("-----------pred_anchor_deltas---------")
-        for feat in pred_anchor_deltas:
-            print(feat.size())
-
         pred_logits = [permute_to_N_HWA_K(x, self.num_classes) for x in pred_logits]
         pred_anchor_deltas = [permute_to_N_HWA_K(x, 4) for x in pred_anchor_deltas]
 
