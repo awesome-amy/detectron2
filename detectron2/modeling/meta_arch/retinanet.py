@@ -248,6 +248,15 @@ class RetinaNet(nn.Module):
         # pred_anchor_deltas = self.regressor(features)
         # pred_logits = self.classifier(features)
         # Transpose the Hi*Wi*A dimension to the middle:
+
+        print("----------pred_logits-----------------")
+        for feat in pred_logits:
+            print(feat.size())
+
+        print("-----------pred_anchor_deltas---------")
+        for feat in pred_anchor_deltas:
+            print(feat.size())
+
         pred_logits = [permute_to_N_HWA_K(x, self.num_classes) for x in pred_logits]
         pred_anchor_deltas = [permute_to_N_HWA_K(x, 4) for x in pred_anchor_deltas]
 
