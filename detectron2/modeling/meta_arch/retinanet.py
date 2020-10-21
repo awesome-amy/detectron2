@@ -135,16 +135,16 @@ class RetinaNet(nn.Module):
         self.vis_period               = cfg.VIS_PERIOD
         self.input_format             = cfg.INPUT.FORMAT
         # fmt: on
-        # self.compound_coef = cfg.MODEL.EFFICIENTNET.COMPOUND_COEF
-        # self.backbone_compound_coef = [0, 1, 2, 3, 4, 5, 6, 6, 7]
-        # self.fpn_num_filters = [64, 88, 112, 160, 224, 288, 384, 384, 384]
-        # self.fpn_cell_repeats = [3, 4, 5, 6, 7, 7, 8, 8, 8]
-        # self.input_sizes = [512, 640, 768, 896, 1024, 1280, 1280, 1536, 1536]
-        # self.box_class_repeats = [3, 3, 3, 4, 4, 4, 5, 5, 5]
-        # self.pyramid_levels = [5, 5, 5, 5, 5, 5, 5, 5, 6]
-        # self.anchor_scale = [4., 4., 4., 4., 4., 4., 4., 5., 4.]
-        # self.aspect_ratios = [(1.0, 1.0), (1.4, 0.7), (0.7, 1.4)]
-        # self.num_scales = len([2 ** 0, 2 ** (1.0 / 3.0), 2 ** (2.0 / 3.0)])
+        self.compound_coef = cfg.MODEL.EFFICIENTNET.COMPOUND_COEF
+        self.backbone_compound_coef = [0, 1, 2, 3, 4, 5, 6, 6, 7]
+        self.fpn_num_filters = [64, 88, 112, 160, 224, 288, 384, 384, 384]
+        self.fpn_cell_repeats = [3, 4, 5, 6, 7, 7, 8, 8, 8]
+        self.input_sizes = [512, 640, 768, 896, 1024, 1280, 1280, 1536, 1536]
+        self.box_class_repeats = [3, 3, 3, 4, 4, 4, 5, 5, 5]
+        self.pyramid_levels = [5, 5, 5, 5, 5, 5, 5, 5, 6]
+        self.anchor_scale = [4., 4., 4., 4., 4., 4., 4., 5., 4.]
+        self.aspect_ratios = [(1.0, 1.0), (1.4, 0.7), (0.7, 1.4)]
+        self.num_scales = len([2 ** 0, 2 ** (1.0 / 3.0), 2 ** (2.0 / 3.0)])
         self.backbone = build_backbone(cfg)
 
         backbone_shape = self.backbone.output_shape()
