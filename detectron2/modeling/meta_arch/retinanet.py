@@ -135,30 +135,31 @@ class RetinaNet(nn.Module):
         self.vis_period               = cfg.VIS_PERIOD
         self.input_format             = cfg.INPUT.FORMAT
         # fmt: on
-        self.compound_coef = cfg.MODEL.EFFICIENTNET.COMPOUND_COEF
-        self.backbone_compound_coef = [0, 1, 2, 3, 4, 5, 6, 6, 7]
-        self.fpn_num_filters = [64, 88, 112, 160, 224, 288, 384, 384, 384]
-        self.fpn_cell_repeats = [3, 4, 5, 6, 7, 7, 8, 8, 8]
-        self.input_sizes = [512, 640, 768, 896, 1024, 1280, 1280, 1536, 1536]
-        self.box_class_repeats = [3, 3, 3, 4, 4, 4, 5, 5, 5]
-        self.pyramid_levels = [5, 5, 5, 5, 5, 5, 5, 5, 6]
-        self.anchor_scale = [4., 4., 4., 4., 4., 4., 4., 5., 4.]
-        self.aspect_ratios = [(1.0, 1.0), (1.4, 0.7), (0.7, 1.4)]
-        self.num_scales = len([2 ** 0, 2 ** (1.0 / 3.0), 2 ** (2.0 / 3.0)])
+        # self.compound_coef = cfg.MODEL.EFFICIENTNET.COMPOUND_COEF
+        # self.backbone_compound_coef = [0, 1, 2, 3, 4, 5, 6, 6, 7]
+        # self.fpn_num_filters = [64, 88, 112, 160, 224, 288, 384, 384, 384]
+        # self.fpn_cell_repeats = [3, 4, 5, 6, 7, 7, 8, 8, 8]
+        # self.input_sizes = [512, 640, 768, 896, 1024, 1280, 1280, 1536, 1536]
+        # self.box_class_repeats = [3, 3, 3, 4, 4, 4, 5, 5, 5]
+        # self.pyramid_levels = [5, 5, 5, 5, 5, 5, 5, 5, 6]
+        # self.anchor_scale = [4., 4., 4., 4., 4., 4., 4., 5., 4.]
+        # self.aspect_ratios = [(1.0, 1.0), (1.4, 0.7), (0.7, 1.4)]
+        # self.num_scales = len([2 ** 0, 2 ** (1.0 / 3.0), 2 ** (2.0 / 3.0)])
         self.backbone = build_backbone(cfg)
 
         backbone_shape = self.backbone.output_shape()
         feature_shapes = [backbone_shape[f] for f in self.in_features]
 
-        # self.head = RetinaNetHead(cfg, feature_shapes)
-        num_anchors = len(self.aspect_ratios) * self.num_scales
-        self.regressor = Regressor(in_channels=self.fpn_num_filters[self.compound_coef], num_anchors=num_anchors,
-                                   num_layers=self.box_class_repeats[self.compound_coef],
-                                   pyramid_levels=self.pyramid_levels[self.compound_coef])
-        self.classifier = Classifier(in_channels=self.fpn_num_filters[self.compound_coef], num_anchors=num_anchors,
-                                     num_classes=self.num_classes,
-                                     num_layers=self.box_class_repeats[self.compound_coef],
-                                     pyramid_levels=self.pyramid_levels[self.compound_coef])
+        self.head = RetinaNetHead(cfg, feature_shapes)
+        # num_anchors = len(self.aspect_ratios) * self.num_scales
+        # self.regressor = Regressor(in_channels=self.fpn_num_filters[self.compound_coef], num_anchors=num_anchors,
+        #                            num_layers=self.box_class_repeats[self.compound_coef],
+        #                            pyramid_levels=self.pyramid_levels[self.compound_coef])
+        # self.classifier = Classifier(in_channels=self.fpn_num_filters[self.compound_coef], num_anchors=num_anchors,
+        #                              num_classes=self.num_classes,
+        #                              num_layers=self.box_class_repeats[self.compound_coef],
+        #                              pyramid_levels=self.pyramid_levels[self.compound_coef])
+
         self.anchor_generator = build_anchor_generator(cfg, feature_shapes)
 
         # Matching and loss
@@ -243,9 +244,9 @@ class RetinaNet(nn.Module):
         features = [features[f] for f in self.in_features]
 
         anchors = self.anchor_generator(features)
-        # pred_logits, pred_anchor_deltas = self.head(features)
-        pred_anchor_deltas = self.regressor(features)
-        pred_logits = self.classifier(features)
+        pred_logits, pred_anchor_deltas = self.head(features)
+        # pred_anchor_deltas = self.regressor(features)
+        # pred_logits = self.classifier(features)
         # Transpose the Hi*Wi*A dimension to the middle:
         pred_logits = [permute_to_N_HWA_K(x, self.num_classes) for x in pred_logits]
         pred_anchor_deltas = [permute_to_N_HWA_K(x, 4) for x in pred_anchor_deltas]
