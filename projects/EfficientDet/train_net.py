@@ -59,8 +59,8 @@ from detectron2.data.transforms.augmentation_impl import ResizeShortestEdge
 from detectron2.data.transforms.transform import ResizeTransform, TransformList, NoOpTransform
 from PIL import Image
 from fvcore.transforms.transform import Transform
-from . import hooks
-from .train_loop import SimpleTrainer
+from detectron2.engine import hooks
+from detectron2.engine.train_loop import SimpleTrainer
 
 __all__ = ["PaddingTransform", "ResizeWithPadding", "Predictor", "Trainer"]
 
