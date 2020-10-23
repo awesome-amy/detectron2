@@ -34,10 +34,8 @@ def permute_to_N_HWA_K(tensor, K):
     # TODO: could the problem be in here (K x Ai) instead of (Ai x K)?
     assert tensor.dim() == 4, tensor.shape
     N, _, H, W = tensor.shape
-    tensor = tensor.view(N, -1, K, H, W)  # original
-    tensor = tensor.permute(0, 3, 4, 1, 2)  # original
-    # tensor = tensor.view(N, K, -1, H, W)
-    # tensor = tensor.permute(0, 3, 4, 2, 1)
+    tensor = tensor.view(N, -1, K, H, W)
+    tensor = tensor.permute(0, 3, 4, 1, 2)
     tensor = tensor.reshape(N, -1, K)  # Size=(N,HWA,K)
     return tensor
 
@@ -439,17 +437,15 @@ class RetinaNet(nn.Module):
         # Iterate over every feature level
         for box_cls_i, box_reg_i, anchors_i in zip(box_cls, box_delta, anchors):
             # (HxWxAxK,)
-            print("box_cls_i")
-            print(box_cls_i)
             predicted_prob = box_cls_i.flatten().sigmoid_()
-            print("predicted_prob")
-            print(predicted_prob)
 
             # Apply two filtering below to make NMS faster.
             # 1. Keep boxes with confidence score higher than threshold
             keep_idxs = predicted_prob > self.score_threshold
             predicted_prob = predicted_prob[keep_idxs]
             topk_idxs = torch.nonzero(keep_idxs, as_tuple=True)[0]
+            print("topk_idxs")
+            print(topk_idxs.size(0))
 
             # 2. Keep top k top scoring boxes only
             num_topk = min(self.topk_candidates, topk_idxs.size(0))
@@ -487,12 +483,8 @@ class RetinaNet(nn.Module):
         Normalize, pad and batch the input images.
         """
         images = [x["image"].to(self.device) for x in batched_inputs]
-        print(images[0])
-        print(self.pixel_mean)
-        print(self.pixel_std)
         images = [(x / 255 - self.pixel_mean) / self.pixel_std for x in images]
         # images = [(x - self.pixel_mean) / self.pixel_std for x in images]
-        print(images[0])
         images = ImageList.from_tensors(images, self.backbone.size_divisibility)
         return images
 
