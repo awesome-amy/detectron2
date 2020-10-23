@@ -6,7 +6,7 @@ _PROJECTS = {
     "point_rend": "PointRend",
     "deeplab": "DeepLab",
     "panoptic_deeplab": "Panoptic-DeepLab",
-    "efficientmask": "EfficientMasks",
+    "efficient_det": "EfficientDet",
 }
 _PROJECT_ROOT = Path(__file__).parent.parent.parent / "projects"
 
