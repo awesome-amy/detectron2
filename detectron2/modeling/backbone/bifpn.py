@@ -102,6 +102,11 @@ class EfficientDetBackbone(Backbone):
         assert len(self._out_features) == len(features)
         return dict(zip(self._out_features, features))
 
+    @property
+    def size_divisibility(self) -> int:
+        # TODO: adapt to d0-d7
+        return 512
+
     def init_backbone(self, path):
         state_dict = torch.load(path)
         try:
