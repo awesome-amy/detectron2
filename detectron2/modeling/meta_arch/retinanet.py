@@ -34,10 +34,10 @@ def permute_to_N_HWA_K(tensor, K):
     # TODO: could the problem be in here (K x Ai) instead of (Ai x K)?
     assert tensor.dim() == 4, tensor.shape
     N, _, H, W = tensor.shape
-    # tensor = tensor.view(N, -1, K, H, W)
-    # tensor = tensor.permute(0, 3, 4, 1, 2)
-    tensor = tensor.view(N, K, -1, H, W)
-    tensor = tensor.permute(0, 3, 4, 2, 1)
+    tensor = tensor.view(N, -1, K, H, W)  # original
+    tensor = tensor.permute(0, 3, 4, 1, 2)  # original
+    # tensor = tensor.view(N, K, -1, H, W)
+    # tensor = tensor.permute(0, 3, 4, 2, 1)
     tensor = tensor.reshape(N, -1, K)  # Size=(N,HWA,K)
     return tensor
 
