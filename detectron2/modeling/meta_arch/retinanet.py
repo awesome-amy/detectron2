@@ -341,11 +341,7 @@ class RetinaNet(nn.Module):
         # Iterate over every feature level
         for box_cls_i, box_reg_i, anchors_i in zip(box_cls, box_delta, anchors):
             # (HxWxAxK,)
-            print("box_cls_i")
-            print(box_cls_i)
             predicted_prob = box_cls_i.flatten().sigmoid_()
-            print("predicted_prob")
-            print(predicted_prob)
 
             # Apply two filtering below to make NMS faster.
             # 1. Keep boxes with confidence score higher than threshold
