@@ -456,21 +456,12 @@ class RetinaNet(nn.Module):
             predicted_prob, idxs = predicted_prob.sort(descending=True)
             predicted_prob = predicted_prob[:num_topk]
             topk_idxs = topk_idxs[idxs[:num_topk]]
-            print("predicted_prob")
-            print(predicted_prob)
 
             anchor_idxs = topk_idxs // self.num_classes
             classes_idxs = topk_idxs % self.num_classes
-            print("classes_idxs")
-            print(classes_idxs)
 
             box_reg_i = box_reg_i[anchor_idxs]
             anchors_i = anchors_i[anchor_idxs]
-            print("box_reg_i")
-            print(box_reg_i)
-
-            print("anchors_i")
-            print(anchors_i)
 
             # predict boxes
             predicted_boxes = self.box2box_transform.apply_deltas(box_reg_i, anchors_i.tensor)
