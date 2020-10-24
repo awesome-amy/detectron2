@@ -2,7 +2,7 @@ import itertools
 import torch
 import torch.nn as nn
 import numpy as np
-
+from detectron2.structures import Boxes
 
 class BBoxTransform(nn.Module):
     def forward(self, anchors, regression):
@@ -127,13 +127,17 @@ class Anchors(nn.Module):
                 boxes_level.append(np.expand_dims(boxes, axis=1))
             # concat anchors on the same level to the reshape NxAx4
             boxes_level = np.concatenate(boxes_level, axis=1)
-            boxes_all.append(boxes_level.reshape([-1, 4]))
+            # boxes_all.append(boxes_level.reshape([-1, 4]))
+            boxes_level = torch.from_numpy(boxes_level.reshape([-1, 4]).astype(dtype))
+            boxes_all.append(boxes_level)
+            # boxes_all.append(boxes_level.reshape([-1, 4]))
 
-        anchor_boxes = np.vstack(boxes_all)
-
-        anchor_boxes = torch.from_numpy(anchor_boxes.astype(dtype)).to(image.device)
-        anchor_boxes = anchor_boxes.unsqueeze(0)
-
-        # save it for later use to reduce overhead
-        self.last_anchors[image.device] = anchor_boxes
-        return anchor_boxes
+        # anchor_boxes = np.vstack(boxes_all)
+        #
+        # anchor_boxes = torch.from_numpy(anchor_boxes.astype(dtype)).to(image.device)
+        # anchor_boxes = anchor_boxes.unsqueeze(0)
+        #
+        # # save it for later use to reduce overhead
+        # self.last_anchors[image.device] = anchor_boxes
+        # return anchor_boxes
+        return [Boxes(x) for x in boxes_all]

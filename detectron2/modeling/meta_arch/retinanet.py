@@ -14,6 +14,7 @@ from detectron2.layers import ShapeSpec, batched_nms, cat, get_norm
 from detectron2.structures import Boxes, ImageList, Instances, pairwise_iou
 from detectron2.utils.events import get_event_storage
 from detectron2.modeling.backbone.efficientdet.model import Regressor, Classifier
+from detectron2.modeling.backbone.efficientdet.utils import Anchors
 
 from ..anchor_generator import build_anchor_generator
 from ..backbone import build_backbone
@@ -152,6 +153,7 @@ class RetinaNet(nn.Module):
         feature_shapes = [backbone_shape[f] for f in self.in_features]
 
         # self.head = RetinaNetHead(cfg, feature_shapes)
+        # self.anchor_generator = build_anchor_generator(cfg, feature_shapes)
         num_anchors = len(self.aspect_ratios) * self.num_scales
         self.regressor = Regressor(in_channels=self.fpn_num_filters[self.compound_coef], num_anchors=num_anchors,
                                    num_layers=self.box_class_repeats[self.compound_coef],
@@ -160,8 +162,8 @@ class RetinaNet(nn.Module):
                                      num_classes=self.num_classes,
                                      num_layers=self.box_class_repeats[self.compound_coef],
                                      pyramid_levels=self.pyramid_levels[self.compound_coef])
-
-        self.anchor_generator = build_anchor_generator(cfg, feature_shapes)
+        self.anchors = Anchors(anchor_scale=self.anchor_scale[self.compound_coef],
+                               pyramid_levels=(torch.arange(self.pyramid_levels[self.compound_coef]) + 3).tolist())
 
         # Matching and loss
         self.box2box_transform = Box2BoxTransform(weights=cfg.MODEL.RETINANET.BBOX_REG_WEIGHTS)
@@ -244,8 +246,8 @@ class RetinaNet(nn.Module):
         features = self.backbone(images.tensor)
         features = [features[f] for f in self.in_features]
 
-        anchors = self.anchor_generator(features)
-        print("anchors")
+        # anchors = self.anchor_generator(features)
+        anchors = self.anchors(batched_inputs, batched_inputs.dtype)
         print(anchors)
         # pred_logits, pred_anchor_deltas = self.head(features)
         pred_anchor_deltas = self.regressor(features)
@@ -446,8 +448,6 @@ class RetinaNet(nn.Module):
             keep_idxs = predicted_prob > self.score_threshold
             predicted_prob = predicted_prob[keep_idxs]
             topk_idxs = torch.nonzero(keep_idxs, as_tuple=True)[0]
-            print("topk_idxs")
-            print(topk_idxs.size(0))
 
             # 2. Keep top k top scoring boxes only
             num_topk = min(self.topk_candidates, topk_idxs.size(0))
@@ -455,12 +455,24 @@ class RetinaNet(nn.Module):
             predicted_prob, idxs = predicted_prob.sort(descending=True)
             predicted_prob = predicted_prob[:num_topk]
             topk_idxs = topk_idxs[idxs[:num_topk]]
+            print("topk_idxs")
+            print(topk_idxs)
+            print("predicted_prob")
+            print(predicted_prob)
 
             anchor_idxs = topk_idxs // self.num_classes
             classes_idxs = topk_idxs % self.num_classes
+            print("anchor_idxs")
+            print(anchor_idxs)
+            print("classes_idxs")
+            print(classes_idxs)
 
             box_reg_i = box_reg_i[anchor_idxs]
             anchors_i = anchors_i[anchor_idxs]
+            print("box_reg_i")
+            print(box_reg_i)
+            print("anchors_i")
+            print(anchors_i)
             # predict boxes
             predicted_boxes = self.box2box_transform.apply_deltas(box_reg_i, anchors_i.tensor)
 
