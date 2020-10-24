@@ -370,6 +370,13 @@ class Regressor(nn.Module):
             # feat = feat.permute(0, 2, 3, 1)
             # feat = feat.contiguous().view(feat.shape[0], -1, 4)
 
+            # convert (dy, dx, dh, dw) to (dx, dy, dw, dh)
+            feat = feat.permute(0, 2, 3, 1)
+            feat = feat.contiguous().view(feat.shape[0], feat.shape[1], feat.shape[2], -1, 4)
+            new_feat = torch.index_select(feat, 4, torch.LongTensor([1, 0, 3, 2]))
+            feat = new_feat.view(feat.shape[0], feat.shape[1], feat.shape[2], -1)
+            feat = feat.permute(0, 3, 1, 2)
+
             feats.append(feat)
 
         # feats = torch.cat(feats, dim=1)
