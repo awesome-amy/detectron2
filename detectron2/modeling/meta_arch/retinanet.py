@@ -466,14 +466,11 @@ class RetinaNet(nn.Module):
 
             box_reg_i = box_reg_i[anchor_idxs]
             anchors_i = anchors_i[anchor_idxs]
-            # TODO: transform box_reg_i from (y1, x1, y2, x2) to (x1, y1, x2, y2)
             print("box_reg_i")
             print(box_reg_i)
 
             print("anchors_i")
             print(anchors_i)
-
-            # TODO: transform anchor from (y1, x1, y2, x2) to (x1, y1, x2, y2)
 
             # predict boxes
             predicted_boxes = self.box2box_transform.apply_deltas(box_reg_i, anchors_i.tensor)
