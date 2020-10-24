@@ -245,6 +245,8 @@ class RetinaNet(nn.Module):
         features = [features[f] for f in self.in_features]
 
         anchors = self.anchor_generator(features)
+        print("anchors")
+        print(anchors)
         # pred_logits, pred_anchor_deltas = self.head(features)
         pred_anchor_deltas = self.regressor(features)
         pred_logits = self.classifier(features)
