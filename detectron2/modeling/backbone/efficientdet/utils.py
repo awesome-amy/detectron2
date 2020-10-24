@@ -128,7 +128,8 @@ class Anchors(nn.Module):
             # concat anchors on the same level to the reshape NxAx4
             boxes_level = np.concatenate(boxes_level, axis=1)
             # boxes_all.append(boxes_level.reshape([-1, 4]))
-            boxes_level = torch.from_numpy(boxes_level.reshape([-1, 4]).astype(dtype))
+            print(image.device)
+            boxes_level = torch.from_numpy(boxes_level.reshape([-1, 4]).astype(dtype)).to(image.device)
             boxes_all.append(boxes_level)
             # boxes_all.append(boxes_level.reshape([-1, 4]))
 
