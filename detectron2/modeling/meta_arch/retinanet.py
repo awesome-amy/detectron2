@@ -455,15 +455,11 @@ class RetinaNet(nn.Module):
             predicted_prob, idxs = predicted_prob.sort(descending=True)
             predicted_prob = predicted_prob[:num_topk]
             topk_idxs = topk_idxs[idxs[:num_topk]]
-            print("topk_idxs")
-            print(topk_idxs)
             print("predicted_prob")
             print(predicted_prob)
 
             anchor_idxs = topk_idxs // self.num_classes
             classes_idxs = topk_idxs % self.num_classes
-            print("anchor_idxs")
-            print(anchor_idxs)
             print("classes_idxs")
             print(classes_idxs)
 
