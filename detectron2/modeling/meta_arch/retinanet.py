@@ -245,9 +245,10 @@ class RetinaNet(nn.Module):
         images = self.preprocess_image(batched_inputs)
         features = self.backbone(images.tensor)
         features = [features[f] for f in self.in_features]
-
+        print(images.tensor)
+        print(images.tensor.dtype)
         # anchors = self.anchor_generator(features)
-        anchors = self.anchors(batched_inputs, batched_inputs.dtype)
+        anchors = self.anchors(images.tensor, images.tensor.dtype)
         print(anchors)
         # pred_logits, pred_anchor_deltas = self.head(features)
         pred_anchor_deltas = self.regressor(features)
