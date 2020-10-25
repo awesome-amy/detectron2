@@ -236,8 +236,11 @@ class Trainer(DefaultTrainer):
         """
         if "build_efficientnet_bifpn_backbone" in cfg.MODEL.BACKBONE.NAME:
             mapper = DatasetMapper(cfg, is_train=True, augmentations=[
-                ResizeWithPadding(cfg.INPUT.MIN_SIZE_TRAIN)
+                T.ResizeShortestEdge(
+                    [cfg.INPUT.MIN_SIZE_TRAIN, cfg.INPUT.MIN_SIZE_TRAIN], cfg.INPUT.MAX_SIZE_TRAIN
+                )
             ])
+            # ResizeWithPadding(cfg.INPUT.MIN_SIZE_TRAIN)
         else:
             mapper = None
         return build_detection_train_loader(cfg, mapper=mapper)
@@ -253,8 +256,11 @@ class Trainer(DefaultTrainer):
         """
         if "build_efficientnet_bifpn_backbone" in cfg.MODEL.BACKBONE.NAME:
             mapper = DatasetMapper(cfg, is_train=True, augmentations=[
-                ResizeWithPadding(cfg.INPUT.MIN_SIZE_TEST)
+                T.ResizeShortestEdge(
+                    [cfg.INPUT.MIN_SIZE_TEST, cfg.INPUT.MIN_SIZE_TEST], cfg.INPUT.MAX_SIZE_TEST
+                )
             ])
+        # ResizeWithPadding(cfg.INPUT.MIN_SIZE_TEST)
         else:
             mapper = None
         return build_detection_test_loader(cfg, dataset_name, mapper=mapper)
