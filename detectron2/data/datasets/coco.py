@@ -88,8 +88,9 @@ def load_coco_json(json_file, image_root, dataset_name=None, extra_annotation_ke
 Category ids in annotations are not in [1, #categories]! We'll apply a mapping for you.
 """
                 )
-        id_map = {v: i for i, v in enumerate(cat_ids)}
-        meta.thing_dataset_id_to_contiguous_id = id_map
+        # TODO: temporarily commented out to fix 90 classes to 80 classes mapping. Change back later.
+        # id_map = {v: i for i, v in enumerate(cat_ids)}
+        # meta.thing_dataset_id_to_contiguous_id = id_map
 
     # sort indices for reproducible results
     img_ids = sorted(coco_api.imgs.keys())
