@@ -255,7 +255,7 @@ class Trainer(DefaultTrainer):
         Overwrite it if you'd like a different data loader.
         """
         if "build_efficientnet_bifpn_backbone" in cfg.MODEL.BACKBONE.NAME:
-            mapper = DatasetMapper(cfg, is_train=True, augmentations=[
+            mapper = DatasetMapper(cfg, is_train=False, augmentations=[
                 T.ResizeShortestEdge(
                     [cfg.INPUT.MIN_SIZE_TEST, cfg.INPUT.MIN_SIZE_TEST], cfg.INPUT.MAX_SIZE_TEST
                 )
