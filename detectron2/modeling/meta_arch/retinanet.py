@@ -167,7 +167,7 @@ class RetinaNet(nn.Module):
         self.anchors = Anchors(anchor_scale=self.anchor_scale[self.compound_coef],
                                pyramid_levels=(torch.arange(self.pyramid_levels[self.compound_coef]) + 3).tolist())
         # mask subnet
-        self.mask = build_roi_heads(cfg, backbone_shapes)
+        self.mask = build_roi_heads(cfg, backbone_shape)
 
         # Matching and loss
         self.box2box_transform = Box2BoxTransform(weights=cfg.MODEL.RETINANET.BBOX_REG_WEIGHTS)
