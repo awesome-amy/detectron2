@@ -20,6 +20,9 @@ from .roi_heads import (
     build_roi_heads,
     select_foreground_proposals,
 )
+
+from .efficientmask_head import EfficientMaskROIHeads
+
 from .rotated_fast_rcnn import RROIHeads
 from .fast_rcnn import FastRCNNOutputLayers
 
