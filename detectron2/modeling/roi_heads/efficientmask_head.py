@@ -45,7 +45,7 @@ class EfficientMaskROIHeads(StandardROIHeads):
             train_on_pred_boxes (bool): whether to use proposal boxes or
                 predicted boxes from the box head to train other heads.
         """
-        super().__init__(**kwargs)
+        super(StandardROIHeads, self).__init__(**kwargs)
         # keep self.in_features for backward compatibility
         self.mask_on = mask_in_features is not None
         if self.mask_on:
