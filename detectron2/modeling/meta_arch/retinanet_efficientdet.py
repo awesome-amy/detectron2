@@ -15,7 +15,6 @@ from detectron2.structures import Boxes, ImageList, Instances, pairwise_iou
 from detectron2.utils.events import get_event_storage
 from detectron2.modeling.backbone.efficientdet.model import Regressor, Classifier
 from detectron2.modeling.backbone.efficientdet.utils import Anchors
-from detectron2.modeling.roi_heads import build_mask_head
 
 from ..anchor_generator import build_anchor_generator
 from ..backbone import build_backbone
@@ -165,8 +164,6 @@ class RetinaNet(nn.Module):
                                      pyramid_levels=self.pyramid_levels[self.compound_coef])
         self.anchors = Anchors(anchor_scale=self.anchor_scale[self.compound_coef],
                                pyramid_levels=(torch.arange(self.pyramid_levels[self.compound_coef]) + 3).tolist())
-        # RIO mask
-        self.mask = build_mask_head(cfg)
 
         # Matching and loss
         self.box2box_transform = Box2BoxTransform(weights=cfg.MODEL.RETINANET.BBOX_REG_WEIGHTS)
@@ -260,22 +257,12 @@ class RetinaNet(nn.Module):
         pred_logits = [permute_to_N_HWA_K(x, self.num_classes) for x in pred_logits]
         pred_anchor_deltas = [permute_to_N_HWA_K(x, 4) for x in pred_anchor_deltas]
 
-        detections = self.inference(anchors, pred_logits, pred_anchor_deltas, images.image_sizes)
-
         if self.training:
             assert "instances" in batched_inputs[0], "Instance annotations are missing in training!"
             gt_instances = [x["instances"].to(self.device) for x in batched_inputs]
 
             gt_labels, gt_boxes = self.label_anchors(anchors, gt_instances)
             losses = self.losses(anchors, pred_logits, gt_labels, pred_anchor_deltas, gt_boxes)
-
-            # create proposals for mask head
-            # detections = self.inference(anchors, pred_logits, pred_anchor_deltas, images.image_sizes)
-            # TODO: why should gt_instances be in the proposals or why not?
-            proposals = detections + gt_instances
-
-            mask_losses = self.mask(features, proposals)
-            losses.update(mask_losses)
 
             if self.vis_period > 0:
                 storage = get_event_storage()
@@ -287,9 +274,8 @@ class RetinaNet(nn.Module):
 
             return losses
         else:
-            # results = self.inference(anchors, pred_logits, pred_anchor_deltas, images.image_sizes)
+            results = self.inference(anchors, pred_logits, pred_anchor_deltas, images.image_sizes)
             processed_results = []
-            results = self.mask(features, detections)
             for results_per_image, input_per_image, image_size in zip(
                 results, batched_inputs, images.image_sizes
             ):
