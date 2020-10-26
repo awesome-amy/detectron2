@@ -248,7 +248,6 @@ class RetinaNet(nn.Module):
         """
         images = self.preprocess_image(batched_inputs)
         features_dict = self.backbone(images.tensor)
-        print(features_dict)
         features = [features_dict[f] for f in self.in_features]
 
         # anchors = self.anchor_generator(features)
@@ -263,7 +262,6 @@ class RetinaNet(nn.Module):
         pred_anchor_deltas = [permute_to_N_HWA_K(x, 4) for x in pred_anchor_deltas]
 
         detections = self.inference(anchors, pred_logits, pred_anchor_deltas, images.image_sizes)
-        print(detections)
 
         if self.training:
             assert "instances" in batched_inputs[0], "Instance annotations are missing in training!"
