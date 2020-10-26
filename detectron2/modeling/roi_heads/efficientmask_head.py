@@ -57,7 +57,7 @@ class EfficientMaskROIHeads(StandardROIHeads):
 
     @classmethod
     def from_config(cls, cfg, input_shape):
-        ret = super().from_config(cfg, input_shape)
+        ret = super(StandardROIHeads, cls).from_config(cfg)
         ret["train_on_pred_boxes"] = cfg.MODEL.ROI_BOX_HEAD.TRAIN_ON_PRED_BOXES
         # Subclasses that have not been updated to use from_config style construction
         # may have overridden _init_*_head methods. In this case, those overridden methods
