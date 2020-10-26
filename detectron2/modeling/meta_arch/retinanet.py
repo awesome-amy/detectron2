@@ -247,8 +247,9 @@ class RetinaNet(nn.Module):
                 mapping from a named loss to a tensor storing the loss. Used during training only.
         """
         images = self.preprocess_image(batched_inputs)
-        features = self.backbone(images.tensor)
-        features = [features[f] for f in self.in_features]
+        features_dict = self.backbone(images.tensor)
+        print(features_dict)
+        features = [features_dict[f] for f in self.in_features]
 
         # anchors = self.anchor_generator(features)
         anchors = self.anchors(images.tensor, images.tensor.dtype)
@@ -262,6 +263,7 @@ class RetinaNet(nn.Module):
         pred_anchor_deltas = [permute_to_N_HWA_K(x, 4) for x in pred_anchor_deltas]
 
         detections = self.inference(anchors, pred_logits, pred_anchor_deltas, images.image_sizes)
+        print(detections)
 
         if self.training:
             assert "instances" in batched_inputs[0], "Instance annotations are missing in training!"
@@ -270,7 +272,7 @@ class RetinaNet(nn.Module):
             gt_labels, gt_boxes = self.label_anchors(anchors, gt_instances)
             losses = self.losses(anchors, pred_logits, gt_labels, pred_anchor_deltas, gt_boxes)
 
-            _, mask_losses = self.mask(images, features, detections, gt_instances)
+            _, mask_losses = self.mask(images, features_dict, detections, gt_instances)
             losses.update(mask_losses)
 
             if self.vis_period > 0:
@@ -285,7 +287,7 @@ class RetinaNet(nn.Module):
         else:
             # results = self.inference(anchors, pred_logits, pred_anchor_deltas, images.image_sizes)
             processed_results = []
-            results, _ = self.mask(images, features, detections)
+            results, _ = self.mask(images, features_dict, detections)
             for results_per_image, input_per_image, image_size in zip(
                 results, batched_inputs, images.image_sizes
             ):
