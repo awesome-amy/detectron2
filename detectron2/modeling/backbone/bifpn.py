@@ -104,7 +104,7 @@ class EfficientDetBackbone(Backbone):
 
     @property
     def size_divisibility(self) -> int:
-        # TODO: adapt to d0-d7
+        # TODO: adapt to d0-d7? Should it be just hard-coded?
         return 512
 
     def init_backbone(self, path):
