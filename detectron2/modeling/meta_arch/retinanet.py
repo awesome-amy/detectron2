@@ -275,8 +275,6 @@ class RetinaNet(nn.Module):
             proposal_per_image.set("proposal_boxes", detection_boxes)
             proposal_per_image.set("objectness_logits", detection_logits)
             proposals.append(proposal_per_image)
-        print(proposals)
-        print(proposals[0].objectness_logits.device)
 
         if self.training:
             assert "instances" in batched_inputs[0], "Instance annotations are missing in training!"
