@@ -263,6 +263,20 @@ class RetinaNet(nn.Module):
 
         detections = self.inference(anchors, pred_logits, pred_anchor_deltas, images.image_sizes)
 
+        proposals = []
+        for detection_per_image in detections:
+            proposal_per_image = detection_per_image
+            # Assign all ground-truth boxes an objectness logit corresponding to
+            # P(object) = sigmoid(logit) =~ 1.
+            detection_boxes = detection_per_image.pred_boxes
+            detection_logit_value = math.log((1.0 - 1e-10) / (1 - (1.0 - 1e-10)))
+            detection_logits = detection_logit_value * torch.ones(len(detection_boxes), device=self.device)
+            proposal_per_image.set("proposal_boxes", detection_boxes)
+            proposal_per_image.set("objectness_logits", detection_logits)
+            proposals.append(proposal_per_image)
+        print(proposals)
+        print(proposals[0].objectness_logits.device)
+
         if self.training:
             assert "instances" in batched_inputs[0], "Instance annotations are missing in training!"
             gt_instances = [x["instances"].to(self.device) for x in batched_inputs]
@@ -270,7 +284,10 @@ class RetinaNet(nn.Module):
             gt_labels, gt_boxes = self.label_anchors(anchors, gt_instances)
             losses = self.losses(anchors, pred_logits, gt_labels, pred_anchor_deltas, gt_boxes)
 
-            _, mask_losses = self.mask(images, features_dict, detections, gt_instances)
+            # gt_proposal.proposal_boxes = gt_boxes
+            # gt_proposal.objectness_logits = gt_logits
+
+            _, mask_losses = self.mask(images, features_dict, proposals, gt_instances)
             losses.update(mask_losses)
 
             if self.vis_period > 0:
@@ -285,7 +302,7 @@ class RetinaNet(nn.Module):
         else:
             # results = self.inference(anchors, pred_logits, pred_anchor_deltas, images.image_sizes)
             processed_results = []
-            results, _ = self.mask(images, features_dict, detections)
+            results, _ = self.mask(images, features_dict, proposals)
             for results_per_image, input_per_image, image_size in zip(
                 results, batched_inputs, images.image_sizes
             ):
