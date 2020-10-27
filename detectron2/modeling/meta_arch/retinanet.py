@@ -151,7 +151,6 @@ class RetinaNet(nn.Module):
         self.backbone = build_backbone(cfg)
 
         backbone_shape = self.backbone.output_shape()
-        print(backbone_shape)
         feature_shapes = [backbone_shape[f] for f in self.in_features]
 
         # self.head = RetinaNetHead(cfg, feature_shapes)
@@ -266,11 +265,13 @@ class RetinaNet(nn.Module):
         proposals = []
         for detection_per_image in detections:
             proposal_per_image = detection_per_image
+
             # Assign all ground-truth boxes an objectness logit corresponding to
             # P(object) = sigmoid(logit) =~ 1.
             detection_boxes = detection_per_image.pred_boxes
             detection_logit_value = math.log((1.0 - 1e-10) / (1 - (1.0 - 1e-10)))
             detection_logits = detection_logit_value * torch.ones(len(detection_boxes), device=self.device)
+
             proposal_per_image.set("proposal_boxes", detection_boxes)
             proposal_per_image.set("objectness_logits", detection_logits)
             proposals.append(proposal_per_image)
