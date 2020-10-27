@@ -239,7 +239,7 @@ class Trainer(DefaultTrainer):
         logger.info("Model:\n{}".format(model))
 
         for name, param in model.named_parameters():
-            if not name.startswith("mask"):
+            if not name.startswith(("classifier", "regressor", "mask")):
                 param.requires_grad = False
 
         return model

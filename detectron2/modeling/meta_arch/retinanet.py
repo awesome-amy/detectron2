@@ -283,9 +283,6 @@ class RetinaNet(nn.Module):
             gt_labels, gt_boxes = self.label_anchors(anchors, gt_instances)
             losses = self.losses(anchors, pred_logits, gt_labels, pred_anchor_deltas, gt_boxes)
 
-            # gt_proposal.proposal_boxes = gt_boxes
-            # gt_proposal.objectness_logits = gt_logits
-
             _, mask_losses = self.mask(images, features_dict, proposals, gt_instances)
             losses.update(mask_losses)
 
