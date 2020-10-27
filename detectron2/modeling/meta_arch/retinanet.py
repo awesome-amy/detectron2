@@ -260,7 +260,8 @@ class RetinaNet(nn.Module):
         pred_logits = [permute_to_N_HWA_K(x, self.num_classes) for x in pred_logits]
         pred_anchor_deltas = [permute_to_N_HWA_K(x, 4) for x in pred_anchor_deltas]
 
-        detections = self.inference(anchors, pred_logits, pred_anchor_deltas, images.image_sizes)
+        with torch.no_grad():
+            detections = self.inference(anchors, pred_logits, pred_anchor_deltas, images.image_sizes)
 
         proposals = []
         for detection_per_image in detections:
