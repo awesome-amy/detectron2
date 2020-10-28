@@ -87,9 +87,6 @@ class EfficientMaskROIHeads(StandardROIHeads):
             for proposals_per_image in proposals:
                 proposals_per_image.proposal_boxes = proposals_per_image.pred_boxes
             proposals = self.label_and_sample_proposals(proposals, targets)
-            assert proposals[0].proposal_boxes
-            assert proposals[0].gt_classes
-            assert proposals[0].gt_masks
         del targets
 
         if self.training:
