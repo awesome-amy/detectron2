@@ -1,18 +1,21 @@
 
 import inspect
 from typing import Dict, List, Optional, Tuple, Union
+import numpy as np
 import torch
 from torch import nn
 
 from detectron2.config import configurable
 from detectron2.layers import ShapeSpec
-from detectron2.structures import Boxes, ImageList, Instances
+from detectron2.utils.events import get_event_storage
+from detectron2.structures import Boxes, ImageList, Instances, pairwise_iou
 
 from ..poolers import ROIPooler
 from .box_head import build_box_head
 from .fast_rcnn import FastRCNNOutputLayers
 from .keypoint_head import build_keypoint_head
 from .mask_head import build_mask_head
+from ..proposal_generator.proposal_utils import add_ground_truth_to_proposals
 from .roi_heads import ROI_HEADS_REGISTRY, StandardROIHeads, select_foreground_proposals
 
 @ROI_HEADS_REGISTRY.register()
@@ -81,47 +84,18 @@ class EfficientMaskROIHeads(StandardROIHeads):
         del images
         if self.training:
             assert targets
+            for proposals_per_image in proposals:
+                proposals_per_image.proposal_boxes = proposals_per_image.pred_boxes
             proposals = self.label_and_sample_proposals(proposals, targets)
+            assert proposals[0].proposal_boxes
+            assert proposals[0].gt_classes
+            assert proposals[0].gt_masks
         del targets
 
         if self.training:
-            # losses = self._forward_box(features, proposals)
-            # Usually the original proposals used by the box head are used by the mask, keypoint
-            # heads. But when `self.train_on_pred_boxes is True`, proposals will contain boxes
-            # predicted by the box head.
             losses = self._forward_mask(features, proposals)
             return proposals, losses
 
         else:
-            # pred_instances = self._forward_box(features, proposals)
-            # During inference cascaded prediction is used: the mask and keypoints heads are only
-            # applied to the top scoring box detections.
-            pred_instances = self.forward_with_given_boxes(features, proposals)
+            pred_instances = self._forward_mask(features, proposals)
             return pred_instances, {}
-
-    def forward_with_given_boxes(
-        self, features: Dict[str, torch.Tensor], instances: List[Instances]
-    ) -> List[Instances]:
-        """
-        Use the given boxes in `instances` to produce other (non-box) per-ROI outputs.
-
-        This is useful for downstream tasks where a box is known, but need to obtain
-        other attributes (outputs of other heads).
-        Test-time augmentation also uses this.
-
-        Args:
-            features: same as in `forward()`
-            instances (list[Instances]): instances to predict other outputs. Expect the keys
-                "pred_boxes" and "pred_classes" to exist.
-
-        Returns:
-            instances (list[Instances]):
-                the same `Instances` objects, with extra
-                fields such as `pred_masks` or `pred_keypoints`.
-        """
-        assert not self.training
-        assert instances[0].has("pred_boxes") and instances[0].has("pred_classes")
-
-        instances = self._forward_mask(features, instances)
-        return instances
-

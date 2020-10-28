@@ -260,8 +260,8 @@ class ROIHeads(torch.nn.Module):
 
         proposals_with_gt = []
 
-        num_fg_samples = []
-        num_bg_samples = []
+        num_fg_samples = [] # fg= foreground
+        num_bg_samples = [] # bg = background
         for proposals_per_image, targets_per_image in zip(proposals, targets):
             has_gt = len(targets_per_image) > 0
             match_quality_matrix = pairwise_iou(
