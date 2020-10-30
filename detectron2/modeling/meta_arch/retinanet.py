@@ -288,13 +288,6 @@ class RetinaNet(nn.Module):
             processed_results = []
             results, _ = self.mask(images, features_dict, detections)
 
-            # TODO: here detections' and results' .pred_boxes may have diverged
-            for results_per_image, detections_per_image in zip(results, detections):
-                print(results_per_image.pred_classes)
-                print(detections_per_image.pred_classes)
-                print(results_per_image.pred_boxes)
-                print(detections_per_image.pred_boxes)
-
             for results_per_image, input_per_image, image_size in zip(
                 results, batched_inputs, images.image_sizes
             ):
