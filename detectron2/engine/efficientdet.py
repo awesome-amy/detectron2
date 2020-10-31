@@ -243,6 +243,12 @@ class Trainer(DefaultTrainer):
                 # if not name.startswith(("classifier", "regressor", "mask")):
                 param.requires_grad = False
 
+        def set_bn_eval(module):
+            if isinstance(module, torch.nn.modules.batchnorm._BatchNorm):
+                module.eval()
+
+        model.apply(set_bn_eval)
+
         return model
 
     @classmethod
