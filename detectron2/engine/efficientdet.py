@@ -238,18 +238,18 @@ class Trainer(DefaultTrainer):
         logger = logging.getLogger(__name__)
         logger.info("Model:\n{}".format(model))
 
+        logger.info("freezing parameters except for mask head ...")
         for name, param in model.named_parameters():
-            logger.info("freezing parameters except for mask head ...")
             if not name.startswith("mask"):
                 # if not name.startswith(("classifier", "regressor", "mask")):
                 param.requires_grad = False
 
         def set_bn_eval(module):
-            logger.info("freezing BatchNorm modules...")
             if isinstance(module, torch.nn.BatchNorm2d):
                 logger.info(module)
                 module.eval()
 
+        logger.info("freezing BatchNorm modules...")
         model.apply(set_bn_eval)
 
         return model
