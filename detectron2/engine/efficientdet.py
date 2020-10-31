@@ -247,6 +247,7 @@ class Trainer(DefaultTrainer):
         def set_bn_eval(module):
             logger.info("freezing BatchNorm modules...")
             if isinstance(module, torch.nn.BatchNorm2d):
+                logger.info(module)
                 module.eval()
 
         model.apply(set_bn_eval)
