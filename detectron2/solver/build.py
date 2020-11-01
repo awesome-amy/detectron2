@@ -115,6 +115,10 @@ def build_optimizer(cfg: CfgNode, model: torch.nn.Module) -> torch.optim.Optimiz
             if not value.requires_grad:
                 continue
             # Avoid duplicating parameters
+
+            logger = logging.getLogger(__name__)
+            logger.info(key, value.requires_grad)
+
             if value in memo:
                 continue
             memo.add(value)
@@ -130,10 +134,6 @@ def build_optimizer(cfg: CfgNode, model: torch.nn.Module) -> torch.optim.Optimiz
                 lr = cfg.SOLVER.BASE_LR * cfg.SOLVER.BIAS_LR_FACTOR
                 weight_decay = cfg.SOLVER.WEIGHT_DECAY_BIAS
             params += [{"params": [value], "lr": lr, "weight_decay": weight_decay}]
-
-    logger = logging.getLogger(__name__)
-    logger.info("Parameters for training...")
-    logger.info(params)
 
     optimizer = torch.optim.SGD(
         params, cfg.SOLVER.BASE_LR, momentum=cfg.SOLVER.MOMENTUM, nesterov=cfg.SOLVER.NESTEROV
