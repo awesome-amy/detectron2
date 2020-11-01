@@ -265,9 +265,10 @@ class RetinaNet(nn.Module):
             gt_instances = [x["instances"].to(self.device) for x in batched_inputs]
 
             gt_labels, gt_boxes = self.label_anchors(anchors, gt_instances)
-            losses = self.losses(anchors, pred_logits, gt_labels, pred_anchor_deltas, gt_boxes)
+            # losses = self.losses(anchors, pred_logits, gt_labels, pred_anchor_deltas, gt_boxes)
 
             with torch.no_grad():
+                losses = self.losses(anchors, pred_logits, gt_labels, pred_anchor_deltas, gt_boxes)
                 detections = self.inference(anchors, pred_logits, pred_anchor_deltas, images.image_sizes)
 
             _, mask_losses = self.mask(images, features_dict, detections, gt_instances)
