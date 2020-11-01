@@ -2,7 +2,6 @@
 from enum import Enum
 from typing import Any, Callable, Dict, Iterable, List, Set, Type, Union
 import torch
-import logging
 
 from detectron2.config import CfgNode
 
@@ -115,10 +114,6 @@ def build_optimizer(cfg: CfgNode, model: torch.nn.Module) -> torch.optim.Optimiz
             if not value.requires_grad:
                 continue
             # Avoid duplicating parameters
-
-            logger = logging.getLogger(__name__)
-            logger.info(key, value.requires_grad)
-
             if value in memo:
                 continue
             memo.add(value)
