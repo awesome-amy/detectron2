@@ -2,6 +2,7 @@
 from enum import Enum
 from typing import Any, Callable, Dict, Iterable, List, Set, Type, Union
 import torch
+import logging
 
 from detectron2.config import CfgNode
 
@@ -129,6 +130,10 @@ def build_optimizer(cfg: CfgNode, model: torch.nn.Module) -> torch.optim.Optimiz
                 lr = cfg.SOLVER.BASE_LR * cfg.SOLVER.BIAS_LR_FACTOR
                 weight_decay = cfg.SOLVER.WEIGHT_DECAY_BIAS
             params += [{"params": [value], "lr": lr, "weight_decay": weight_decay}]
+
+    logger = logging.getLogger(__name__)
+    logger.info("Parameters for training...")
+    logger.info(params)
 
     optimizer = torch.optim.SGD(
         params, cfg.SOLVER.BASE_LR, momentum=cfg.SOLVER.MOMENTUM, nesterov=cfg.SOLVER.NESTEROV
