@@ -265,12 +265,20 @@ class RetinaNet(nn.Module):
             gt_instances = [x["instances"].to(self.device) for x in batched_inputs]
 
             gt_labels, gt_boxes = self.label_anchors(anchors, gt_instances)
-            # losses = self.losses(anchors, pred_logits, gt_labels, pred_anchor_deltas, gt_boxes)
+            losses = self.losses(anchors, pred_logits, gt_labels, pred_anchor_deltas, gt_boxes)
+
+            # Check if the gradients are disabled properly
+            logger = logging.getLogger(__name__)
+            logger.info(self.regressor.training)
+            for name, param in self.regressor.named_parameters():
+                logger.info("Regressor parameter {} requires_grad is {}".format(name, param.requires_grad))
+
+            logger.info(self.classifier.training)
+            for name, param in self.classifier.named_parameters():
+                logger.info("Classifier parameter {} requires_grad is {}".format(name, param.requires_grad))
 
             with torch.no_grad():
-                losses = self.losses(anchors, pred_logits, gt_labels, pred_anchor_deltas, gt_boxes)
                 detections = self.inference(anchors, pred_logits, pred_anchor_deltas, images.image_sizes)
-
             _, mask_losses = self.mask(images, features_dict, detections, gt_instances)
             losses.update(mask_losses)
 
