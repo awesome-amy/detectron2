@@ -226,34 +226,6 @@ class Trainer(DefaultTrainer):
     """
 
     @classmethod
-    def build_model(cls, cfg):
-        """
-        Returns:
-            torch.nn.Module:
-
-        It now calls :func:`detectron2.modeling.build_model`.
-        Overwrite it if you'd like a different model.
-        """
-        model = build_model(cfg)
-        logger = logging.getLogger(__name__)
-        logger.info("Model:\n{}".format(model))
-
-        logger.info("freezing parameters except for mask head ...")
-        for name, param in model.named_parameters():
-            if not name.startswith("mask"):
-                # if not name.startswith(("classifier", "regressor", "mask")):
-                param.requires_grad = False
-
-        def set_bn_eval(module):
-            if isinstance(module, torch.nn.BatchNorm2d):
-                module.eval()
-
-        logger.info("freezing BatchNorm modules...")
-        model.apply(set_bn_eval)
-
-        return model
-
-    @classmethod
     def build_train_loader(cls, cfg):
         """
         Returns:

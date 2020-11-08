@@ -150,8 +150,6 @@ class EfficientDet(nn.Module):
         self.backbone = build_backbone(cfg)
 
         backbone_shape = self.backbone.output_shape()
-        print("backbone_shape")
-        print(backbone_shape)
         feature_shapes = [backbone_shape[f] for f in self.in_features]
 
         # self.head = RetinaNetHead(cfg, feature_shapes)
@@ -286,7 +284,7 @@ class EfficientDet(nn.Module):
             #     width = input_per_image.get("width", image_size[1])
             #     r = detector_postprocess(results_per_image, height, width)
             #     processed_results.append({"instances": r})
-            return images, features, processed_results
+            return images, features_dict, processed_results
 
     def losses(self, anchors, pred_logits, gt_labels, pred_anchor_deltas, gt_boxes):
         """

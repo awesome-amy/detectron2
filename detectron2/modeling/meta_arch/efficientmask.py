@@ -20,6 +20,8 @@ class EfficientMask(nn.Module):
         # TODO: get shape directly without building backbone
         self.backbone = build_backbone(cfg)
         backbone_shape = self.backbone.output_shape()
+        print("backbone_shape")
+        print(backbone_shape)
 
         self.detector = self.EfficientDet(cfg)
         self.mask = build_roi_heads(cfg, backbone_shape)
