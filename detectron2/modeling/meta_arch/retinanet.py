@@ -259,26 +259,16 @@ class RetinaNet(nn.Module):
         # Transpose the Hi*Wi*A dimension to the middle:
         pred_logits = [permute_to_N_HWA_K(x, self.num_classes) for x in pred_logits]
         pred_anchor_deltas = [permute_to_N_HWA_K(x, 4) for x in pred_anchor_deltas]
+        detections = self.inference(anchors, pred_logits, pred_anchor_deltas, images.image_sizes)
 
         if self.training:
             assert "instances" in batched_inputs[0], "Instance annotations are missing in training!"
             gt_instances = [x["instances"].to(self.device) for x in batched_inputs]
 
+            losses = {}
             gt_labels, gt_boxes = self.label_anchors(anchors, gt_instances)
-            losses = self.losses(anchors, pred_logits, gt_labels, pred_anchor_deltas, gt_boxes)
-
-            # Check if the gradients are disabled properly
-            logger = logging.getLogger(__name__)
-            logger.info(self.regressor.training)
-            for name, param in self.regressor.named_parameters():
-                logger.info("Regressor parameter {} requires_grad is {}".format(name, param.requires_grad))
-
-            logger.info(self.classifier.training)
-            for name, param in self.classifier.named_parameters():
-                logger.info("Classifier parameter {} requires_grad is {}".format(name, param.requires_grad))
-
-            with torch.no_grad():
-                detections = self.inference(anchors, pred_logits, pred_anchor_deltas, images.image_sizes)
+            detector_losses = self.losses(anchors, pred_logits, gt_labels, pred_anchor_deltas, gt_boxes)
+            losses.update(detector_losses)
             _, mask_losses = self.mask(images, features_dict, detections, gt_instances)
             losses.update(mask_losses)
 
@@ -292,8 +282,6 @@ class RetinaNet(nn.Module):
 
             return losses
         else:
-            detections = self.inference(anchors, pred_logits, pred_anchor_deltas, images.image_sizes)
-            # results = self.inference(anchors, pred_logits, pred_anchor_deltas, images.image_sizes)
             processed_results = []
             results, _ = self.mask(images, features_dict, detections)
 

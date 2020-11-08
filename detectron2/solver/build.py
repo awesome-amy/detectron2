@@ -2,7 +2,7 @@
 from enum import Enum
 from typing import Any, Callable, Dict, Iterable, List, Set, Type, Union
 import torch
-
+import logging
 from detectron2.config import CfgNode
 
 from .lr_scheduler import WarmupCosineLR, WarmupMultiStepLR
@@ -94,6 +94,7 @@ def build_optimizer(cfg: CfgNode, model: torch.nn.Module) -> torch.optim.Optimiz
     """
     Build an optimizer from config.
     """
+    logger = logging.getLogger(__name__)
     norm_module_types = (
         torch.nn.BatchNorm1d,
         torch.nn.BatchNorm2d,
@@ -117,6 +118,9 @@ def build_optimizer(cfg: CfgNode, model: torch.nn.Module) -> torch.optim.Optimiz
             if value in memo:
                 continue
             memo.add(value)
+
+            logger.info("Add param {} to optim".format(key))
+
             lr = cfg.SOLVER.BASE_LR
             weight_decay = cfg.SOLVER.WEIGHT_DECAY
             if isinstance(module, norm_module_types):
