@@ -13,17 +13,12 @@ from detectron2.data.detection_utils import convert_image_to_rgb
 from detectron2.layers import ShapeSpec, batched_nms, cat, get_norm
 from detectron2.structures import Boxes, ImageList, Instances, pairwise_iou
 from detectron2.utils.events import get_event_storage
-from detectron2.modeling.backbone.efficientdet.model import Regressor, Classifier
-from detectron2.modeling.backbone.efficientdet.utils import Anchors
-from detectron2.modeling.roi_heads import build_roi_heads
 
 from ..anchor_generator import build_anchor_generator
 from ..backbone import build_backbone
 from ..box_regression import Box2BoxTransform
 from ..matcher import Matcher
-# from ..postprocessing import detector_postprocess
-from detectron2.utils.memory import retry_if_cuda_oom
-from detectron2.layers import paste_masks_in_image
+from ..postprocessing import detector_postprocess
 from .build import META_ARCH_REGISTRY
 
 __all__ = ["RetinaNet"]
@@ -33,84 +28,12 @@ def permute_to_N_HWA_K(tensor, K):
     """
     Transpose/reshape a tensor from (N, (Ai x K), H, W) to (N, (HxWxAi), K)
     """
-    # TODO: could the problem be in here (K x Ai) instead of (Ai x K)?
     assert tensor.dim() == 4, tensor.shape
     N, _, H, W = tensor.shape
     tensor = tensor.view(N, -1, K, H, W)
     tensor = tensor.permute(0, 3, 4, 1, 2)
     tensor = tensor.reshape(N, -1, K)  # Size=(N,HWA,K)
     return tensor
-
-
-def detector_postprocess(results, output_height, output_width, mask_threshold=0.5):
-    """
-    Resize the output instances.
-    The input images are often resized when entering an object detector.
-    As a result, we often need the outputs of the detector in a different
-    resolution from its inputs.
-
-    This function will resize the raw outputs of an R-CNN detector
-    to produce outputs according to the desired output resolution.
-
-    Args:
-        results (Instances): the raw outputs from the detector.
-            `results.image_size` contains the input image resolution the detector sees.
-            This object might be modified in-place.
-        output_height, output_width: the desired output resolution.
-
-    Returns:
-        Instances: the resized output from the model, based on the output resolution
-    """
-
-    # Converts integer tensors to float temporaries
-    #   to ensure true division is performed when
-    #   computing scale_x and scale_y.
-    if isinstance(output_width, torch.Tensor):
-        output_width_tmp = output_width.float()
-    else:
-        output_width_tmp = output_width
-
-    if isinstance(output_height, torch.Tensor):
-        output_height_tmp = output_height.float()
-    else:
-        output_height_tmp = output_height
-
-    if output_height_tmp > output_width_tmp:
-        results_height = results.image_size[0]
-        results_width = int(results.image_size[0] * output_width_tmp / output_height_tmp)
-    else:
-        results_height = int(results.image_size[1] * output_height_tmp / output_width_tmp)
-        results_width = results.image_size[1]
-
-    scale_x, scale_y = (
-        output_width_tmp / results_width,
-        output_height_tmp / results_height,
-    )
-    results = Instances((output_height, output_width), **results.get_fields())
-
-    if results.has("pred_boxes"):
-        output_boxes = results.pred_boxes
-    elif results.has("proposal_boxes"):
-        output_boxes = results.proposal_boxes
-
-    output_boxes.scale(scale_x, scale_y)
-    output_boxes.clip(results.image_size)
-
-    results = results[output_boxes.nonempty()]
-
-    if results.has("pred_masks"):
-        results.pred_masks = retry_if_cuda_oom(paste_masks_in_image)(
-            results.pred_masks[:, 0, :, :],  # N, 1, M, M
-            results.pred_boxes,
-            results.image_size,
-            threshold=mask_threshold,
-        )
-
-    if results.has("pred_keypoints"):
-        results.pred_keypoints[:, :, 0] *= scale_x
-        results.pred_keypoints[:, :, 1] *= scale_y
-
-    return results
 
 
 @META_ARCH_REGISTRY.register()
@@ -138,35 +61,13 @@ class RetinaNet(nn.Module):
         self.vis_period               = cfg.VIS_PERIOD
         self.input_format             = cfg.INPUT.FORMAT
         # fmt: on
-        self.compound_coef = cfg.MODEL.EFFICIENTNET.COMPOUND_COEF
-        self.backbone_compound_coef = [0, 1, 2, 3, 4, 5, 6, 6, 7]
-        self.fpn_num_filters = [64, 88, 112, 160, 224, 288, 384, 384, 384]
-        self.fpn_cell_repeats = [3, 4, 5, 6, 7, 7, 8, 8, 8]
-        self.input_sizes = [512, 640, 768, 896, 1024, 1280, 1280, 1536, 1536]
-        self.box_class_repeats = [3, 3, 3, 4, 4, 4, 5, 5, 5]
-        self.pyramid_levels = [5, 5, 5, 5, 5, 5, 5, 5, 6]
-        self.anchor_scale = [4., 4., 4., 4., 4., 4., 4., 5., 4.]
-        self.aspect_ratios = [(1.0, 1.0), (1.4, 0.7), (0.7, 1.4)]
-        self.num_scales = len([2 ** 0, 2 ** (1.0 / 3.0), 2 ** (2.0 / 3.0)])
+
         self.backbone = build_backbone(cfg)
 
         backbone_shape = self.backbone.output_shape()
         feature_shapes = [backbone_shape[f] for f in self.in_features]
-
-        # self.head = RetinaNetHead(cfg, feature_shapes)
-        # self.anchor_generator = build_anchor_generator(cfg, feature_shapes)
-        num_anchors = len(self.aspect_ratios) * self.num_scales
-        self.regressor = Regressor(in_channels=self.fpn_num_filters[self.compound_coef], num_anchors=num_anchors,
-                                   num_layers=self.box_class_repeats[self.compound_coef],
-                                   pyramid_levels=self.pyramid_levels[self.compound_coef])
-        self.classifier = Classifier(in_channels=self.fpn_num_filters[self.compound_coef], num_anchors=num_anchors,
-                                     num_classes=self.num_classes,
-                                     num_layers=self.box_class_repeats[self.compound_coef],
-                                     pyramid_levels=self.pyramid_levels[self.compound_coef])
-        self.anchors = Anchors(anchor_scale=self.anchor_scale[self.compound_coef],
-                               pyramid_levels=(torch.arange(self.pyramid_levels[self.compound_coef]) + 3).tolist())
-        # mask subnet
-        self.mask = build_roi_heads(cfg, backbone_shape)
+        self.head = RetinaNetHead(cfg, feature_shapes)
+        self.anchor_generator = build_anchor_generator(cfg, feature_shapes)
 
         # Matching and loss
         self.box2box_transform = Box2BoxTransform(weights=cfg.MODEL.RETINANET.BBOX_REG_WEIGHTS)
@@ -246,31 +147,21 @@ class RetinaNet(nn.Module):
                 mapping from a named loss to a tensor storing the loss. Used during training only.
         """
         images = self.preprocess_image(batched_inputs)
-        features_dict = self.backbone(images.tensor)
-        features = [features_dict[f] for f in self.in_features]
+        features = self.backbone(images.tensor)
+        features = [features[f] for f in self.in_features]
 
-        # anchors = self.anchor_generator(features)
-        anchors = self.anchors(images.tensor, images.tensor.dtype)
-
-        # pred_logits, pred_anchor_deltas = self.head(features)
-        pred_anchor_deltas = self.regressor(features)
-        pred_logits = self.classifier(features)
-
+        anchors = self.anchor_generator(features)
+        pred_logits, pred_anchor_deltas = self.head(features)
         # Transpose the Hi*Wi*A dimension to the middle:
         pred_logits = [permute_to_N_HWA_K(x, self.num_classes) for x in pred_logits]
         pred_anchor_deltas = [permute_to_N_HWA_K(x, 4) for x in pred_anchor_deltas]
-        detections = self.inference(anchors, pred_logits, pred_anchor_deltas, images.image_sizes)
 
         if self.training:
             assert "instances" in batched_inputs[0], "Instance annotations are missing in training!"
             gt_instances = [x["instances"].to(self.device) for x in batched_inputs]
 
-            losses = {}
             gt_labels, gt_boxes = self.label_anchors(anchors, gt_instances)
-            detector_losses = self.losses(anchors, pred_logits, gt_labels, pred_anchor_deltas, gt_boxes)
-            losses.update(detector_losses)
-            _, mask_losses = self.mask(images, features_dict, detections, gt_instances)
-            losses.update(mask_losses)
+            losses = self.losses(anchors, pred_logits, gt_labels, pred_anchor_deltas, gt_boxes)
 
             if self.vis_period > 0:
                 storage = get_event_storage()
@@ -282,9 +173,8 @@ class RetinaNet(nn.Module):
 
             return losses
         else:
+            results = self.inference(anchors, pred_logits, pred_anchor_deltas, images.image_sizes)
             processed_results = []
-            results, _ = self.mask(images, features_dict, detections)
-
             for results_per_image, input_per_image, image_size in zip(
                 results, batched_inputs, images.image_sizes
             ):
@@ -471,7 +361,6 @@ class RetinaNet(nn.Module):
 
             box_reg_i = box_reg_i[anchor_idxs]
             anchors_i = anchors_i[anchor_idxs]
-
             # predict boxes
             predicted_boxes = self.box2box_transform.apply_deltas(box_reg_i, anchors_i.tensor)
 
@@ -496,7 +385,120 @@ class RetinaNet(nn.Module):
         Normalize, pad and batch the input images.
         """
         images = [x["image"].to(self.device) for x in batched_inputs]
-        images = [(torch.true_divide(x, 255) - self.pixel_mean) / self.pixel_std for x in images]
-        # images = [(x - self.pixel_mean) / self.pixel_std for x in images]
+        images = [(x - self.pixel_mean) / self.pixel_std for x in images]
         images = ImageList.from_tensors(images, self.backbone.size_divisibility)
         return images
+
+
+class RetinaNetHead(nn.Module):
+    """
+    The head used in RetinaNet for object classification and box regression.
+    It has two subnets for the two tasks, with a common structure but separate parameters.
+    """
+
+    @configurable
+    def __init__(
+        self,
+        *,
+        input_shape: List[ShapeSpec],
+        num_classes,
+        num_anchors,
+        conv_dims: List[int],
+        norm="",
+        prior_prob=0.01,
+    ):
+        """
+        NOTE: this interface is experimental.
+
+        Args:
+            input_shape (List[ShapeSpec]): input shape
+            num_classes (int): number of classes. Used to label background proposals.
+            num_anchors (int): number of generated anchors
+            conv_dims (List[int]): dimensions for each convolution layer
+            norm (str or callable):
+                    Normalization for conv layers except for the two output layers.
+                    See :func:`detectron2.layers.get_norm` for supported types.
+            prior_prob (float): Prior weight for computing bias
+        """
+        super().__init__()
+
+        if norm == "BN" or norm == "SyncBN":
+            logger = logging.getLogger(__name__)
+            logger.warn("Shared norm does not work well for BN, SyncBN, expect poor results")
+
+        cls_subnet = []
+        bbox_subnet = []
+        for in_channels, out_channels in zip([input_shape[0].channels] + conv_dims, conv_dims):
+            cls_subnet.append(
+                nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=1, padding=1)
+            )
+            if norm:
+                cls_subnet.append(get_norm(norm, out_channels))
+            cls_subnet.append(nn.ReLU())
+            bbox_subnet.append(
+                nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=1, padding=1)
+            )
+            if norm:
+                bbox_subnet.append(get_norm(norm, out_channels))
+            bbox_subnet.append(nn.ReLU())
+
+        self.cls_subnet = nn.Sequential(*cls_subnet)
+        self.bbox_subnet = nn.Sequential(*bbox_subnet)
+        self.cls_score = nn.Conv2d(
+            conv_dims[-1], num_anchors * num_classes, kernel_size=3, stride=1, padding=1
+        )
+        self.bbox_pred = nn.Conv2d(
+            conv_dims[-1], num_anchors * 4, kernel_size=3, stride=1, padding=1
+        )
+
+        # Initialization
+        for modules in [self.cls_subnet, self.bbox_subnet, self.cls_score, self.bbox_pred]:
+            for layer in modules.modules():
+                if isinstance(layer, nn.Conv2d):
+                    torch.nn.init.normal_(layer.weight, mean=0, std=0.01)
+                    torch.nn.init.constant_(layer.bias, 0)
+
+        # Use prior in model initialization to improve stability
+        bias_value = -(math.log((1 - prior_prob) / prior_prob))
+        torch.nn.init.constant_(self.cls_score.bias, bias_value)
+
+    @classmethod
+    def from_config(cls, cfg, input_shape: List[ShapeSpec]):
+        num_anchors = build_anchor_generator(cfg, input_shape).num_cell_anchors
+        # fmt: on
+        assert (
+            len(set(num_anchors)) == 1
+        ), "Using different number of anchors between levels is not currently supported!"
+        num_anchors = num_anchors[0]
+
+        return {
+            "input_shape": input_shape,
+            "num_classes": cfg.MODEL.RETINANET.NUM_CLASSES,
+            "conv_dims": [input_shape[0].channels] * cfg.MODEL.RETINANET.NUM_CONVS,
+            "prior_prob": cfg.MODEL.RETINANET.PRIOR_PROB,
+            "norm": cfg.MODEL.RETINANET.NORM,
+            "num_anchors": num_anchors,
+        }
+
+    def forward(self, features):
+        """
+        Arguments:
+            features (list[Tensor]): FPN feature map tensors in high to low resolution.
+                Each tensor in the list correspond to different feature levels.
+
+        Returns:
+            logits (list[Tensor]): #lvl tensors, each has shape (N, AxK, Hi, Wi).
+                The tensor predicts the classification probability
+                at each spatial position for each of the A anchors and K object
+                classes.
+            bbox_reg (list[Tensor]): #lvl tensors, each has shape (N, Ax4, Hi, Wi).
+                The tensor predicts 4-vector (dx,dy,dw,dh) box
+                regression values for every anchor. These values are the
+                relative offset between the anchor and the ground truth box.
+        """
+        logits = []
+        bbox_reg = []
+        for feature in features:
+            logits.append(self.cls_score(self.cls_subnet(feature)))
+            bbox_reg.append(self.bbox_pred(self.bbox_subnet(feature)))
+        return logits, bbox_reg

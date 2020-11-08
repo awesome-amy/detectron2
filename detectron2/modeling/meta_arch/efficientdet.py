@@ -13,21 +13,26 @@ from detectron2.data.detection_utils import convert_image_to_rgb
 from detectron2.layers import ShapeSpec, batched_nms, cat, get_norm
 from detectron2.structures import Boxes, ImageList, Instances, pairwise_iou
 from detectron2.utils.events import get_event_storage
+from detectron2.modeling.backbone.efficientdet.model import Regressor, Classifier
+from detectron2.modeling.backbone.efficientdet.utils import Anchors
 
 from ..anchor_generator import build_anchor_generator
 from ..backbone import build_backbone
 from ..box_regression import Box2BoxTransform
 from ..matcher import Matcher
-from ..postprocessing import detector_postprocess
+# from ..postprocessing import detector_postprocess
+from detectron2.utils.memory import retry_if_cuda_oom
+from detectron2.layers import paste_masks_in_image
 from .build import META_ARCH_REGISTRY
 
-__all__ = ["RetinaNet"]
+__all__ = ["EfficientDet"]
 
 
 def permute_to_N_HWA_K(tensor, K):
     """
     Transpose/reshape a tensor from (N, (Ai x K), H, W) to (N, (HxWxAi), K)
     """
+    # TODO: could the problem be in here (K x Ai) instead of (Ai x K)?
     assert tensor.dim() == 4, tensor.shape
     N, _, H, W = tensor.shape
     tensor = tensor.view(N, -1, K, H, W)
@@ -36,8 +41,79 @@ def permute_to_N_HWA_K(tensor, K):
     return tensor
 
 
+def detector_postprocess(results, output_height, output_width, mask_threshold=0.5):
+    """
+    Resize the output instances.
+    The input images are often resized when entering an object detector.
+    As a result, we often need the outputs of the detector in a different
+    resolution from its inputs.
+
+    This function will resize the raw outputs of an R-CNN detector
+    to produce outputs according to the desired output resolution.
+
+    Args:
+        results (Instances): the raw outputs from the detector.
+            `results.image_size` contains the input image resolution the detector sees.
+            This object might be modified in-place.
+        output_height, output_width: the desired output resolution.
+
+    Returns:
+        Instances: the resized output from the model, based on the output resolution
+    """
+
+    # Converts integer tensors to float temporaries
+    #   to ensure true division is performed when
+    #   computing scale_x and scale_y.
+    if isinstance(output_width, torch.Tensor):
+        output_width_tmp = output_width.float()
+    else:
+        output_width_tmp = output_width
+
+    if isinstance(output_height, torch.Tensor):
+        output_height_tmp = output_height.float()
+    else:
+        output_height_tmp = output_height
+
+    if output_height_tmp > output_width_tmp:
+        results_height = results.image_size[0]
+        results_width = int(results.image_size[0] * output_width_tmp / output_height_tmp)
+    else:
+        results_height = int(results.image_size[1] * output_height_tmp / output_width_tmp)
+        results_width = results.image_size[1]
+
+    scale_x, scale_y = (
+        output_width_tmp / results_width,
+        output_height_tmp / results_height,
+    )
+    results = Instances((output_height, output_width), **results.get_fields())
+
+    if results.has("pred_boxes"):
+        output_boxes = results.pred_boxes
+    elif results.has("proposal_boxes"):
+        output_boxes = results.proposal_boxes
+
+    output_boxes.scale(scale_x, scale_y)
+    output_boxes.clip(results.image_size)
+
+    results = results[output_boxes.nonempty()]
+
+    if results.has("pred_masks"):
+        results.pred_masks = retry_if_cuda_oom(paste_masks_in_image)(
+            results.pred_masks[:, 0, :, :],  # N, 1, M, M
+            results.pred_boxes,
+            results.image_size,
+            threshold=mask_threshold,
+        )
+
+    if results.has("pred_keypoints"):
+        results.pred_keypoints[:, :, 0] *= scale_x
+        results.pred_keypoints[:, :, 1] *= scale_y
+
+    return results
+
+
 @META_ARCH_REGISTRY.register()
-class RetinaNet(nn.Module):
+class EfficientDet(nn.Module):
     """
     Implement RetinaNet in :paper:`RetinaNet`.
     """
@@ -61,13 +137,35 @@ class RetinaNet(nn.Module):
         self.vis_period               = cfg.VIS_PERIOD
         self.input_format             = cfg.INPUT.FORMAT
         # fmt: on
-
+        self.compound_coef = cfg.MODEL.EFFICIENTNET.COMPOUND_COEF
+        self.backbone_compound_coef = [0, 1, 2, 3, 4, 5, 6, 6, 7]
+        self.fpn_num_filters = [64, 88, 112, 160, 224, 288, 384, 384, 384]
+        self.fpn_cell_repeats = [3, 4, 5, 6, 7, 7, 8, 8, 8]
+        self.input_sizes = [512, 640, 768, 896, 1024, 1280, 1280, 1536, 1536]
+        self.box_class_repeats = [3, 3, 3, 4, 4, 4, 5, 5, 5]
+        self.pyramid_levels = [5, 5, 5, 5, 5, 5, 5, 5, 6]
+        self.anchor_scale = [4., 4., 4., 4., 4., 4., 4., 5., 4.]
+        self.aspect_ratios = [(1.0, 1.0), (1.4, 0.7), (0.7, 1.4)]
+        self.num_scales = len([2 ** 0, 2 ** (1.0 / 3.0), 2 ** (2.0 / 3.0)])
         self.backbone = build_backbone(cfg)
 
         backbone_shape = self.backbone.output_shape()
+        print("backbone_shape")
+        print(backbone_shape)
         feature_shapes = [backbone_shape[f] for f in self.in_features]
-        self.head = RetinaNetHead(cfg, feature_shapes)
-        self.anchor_generator = build_anchor_generator(cfg, feature_shapes)
+
+        # self.head = RetinaNetHead(cfg, feature_shapes)
+        # self.anchor_generator = build_anchor_generator(cfg, feature_shapes)
+        num_anchors = len(self.aspect_ratios) * self.num_scales
+        self.regressor = Regressor(in_channels=self.fpn_num_filters[self.compound_coef], num_anchors=num_anchors,
+                                   num_layers=self.box_class_repeats[self.compound_coef],
+                                   pyramid_levels=self.pyramid_levels[self.compound_coef])
+        self.classifier = Classifier(in_channels=self.fpn_num_filters[self.compound_coef], num_anchors=num_anchors,
+                                     num_classes=self.num_classes,
+                                     num_layers=self.box_class_repeats[self.compound_coef],
+                                     pyramid_levels=self.pyramid_levels[self.compound_coef])
+        self.anchors = Anchors(anchor_scale=self.anchor_scale[self.compound_coef],
+                               pyramid_levels=(torch.arange(self.pyramid_levels[self.compound_coef]) + 3).tolist())
 
         # Matching and loss
         self.box2box_transform = Box2BoxTransform(weights=cfg.MODEL.RETINANET.BBOX_REG_WEIGHTS)
@@ -147,11 +245,16 @@ class RetinaNet(nn.Module):
                 mapping from a named loss to a tensor storing the loss. Used during training only.
         """
         images = self.preprocess_image(batched_inputs)
-        features = self.backbone(images.tensor)
-        features = [features[f] for f in self.in_features]
+        features_dict = self.backbone(images.tensor)
+        features = [features_dict[f] for f in self.in_features]
 
-        anchors = self.anchor_generator(features)
-        pred_logits, pred_anchor_deltas = self.head(features)
+        # anchors = self.anchor_generator(features)
+        anchors = self.anchors(images.tensor, images.tensor.dtype)
+
+        # pred_logits, pred_anchor_deltas = self.head(features)
+        pred_anchor_deltas = self.regressor(features)
+        pred_logits = self.classifier(features)
+
         # Transpose the Hi*Wi*A dimension to the middle:
         pred_logits = [permute_to_N_HWA_K(x, self.num_classes) for x in pred_logits]
         pred_anchor_deltas = [permute_to_N_HWA_K(x, 4) for x in pred_anchor_deltas]
@@ -174,15 +277,16 @@ class RetinaNet(nn.Module):
             return losses
         else:
             results = self.inference(anchors, pred_logits, pred_anchor_deltas, images.image_sizes)
-            processed_results = []
-            for results_per_image, input_per_image, image_size in zip(
-                results, batched_inputs, images.image_sizes
-            ):
-                height = input_per_image.get("height", image_size[0])
-                width = input_per_image.get("width", image_size[1])
-                r = detector_postprocess(results_per_image, height, width)
-                processed_results.append({"instances": r})
-            return processed_results
+            processed_results = results
+            # processed_results = []
+            # for results_per_image, input_per_image, image_size in zip(
+            #     results, batched_inputs, images.image_sizes
+            # ):
+            #     height = input_per_image.get("height", image_size[0])
+            #     width = input_per_image.get("width", image_size[1])
+            #     r = detector_postprocess(results_per_image, height, width)
+            #     processed_results.append({"instances": r})
+            return images, features, processed_results
 
     def losses(self, anchors, pred_logits, gt_labels, pred_anchor_deltas, gt_boxes):
         """
@@ -361,6 +465,7 @@ class RetinaNet(nn.Module):
 
             box_reg_i = box_reg_i[anchor_idxs]
             anchors_i = anchors_i[anchor_idxs]
+
             # predict boxes
             predicted_boxes = self.box2box_transform.apply_deltas(box_reg_i, anchors_i.tensor)
 
@@ -385,7 +490,8 @@ class RetinaNet(nn.Module):
         Normalize, pad and batch the input images.
         """
         images = [x["image"].to(self.device) for x in batched_inputs]
-        images = [(x - self.pixel_mean) / self.pixel_std for x in images]
+        images = [(torch.true_divide(x, 255) - self.pixel_mean) / self.pixel_std for x in images]
+        # images = [(x - self.pixel_mean) / self.pixel_std for x in images]
         images = ImageList.from_tensors(images, self.backbone.size_divisibility)
         return images
 
