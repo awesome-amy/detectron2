@@ -23,7 +23,7 @@ class EfficientMask(nn.Module):
         print("backbone_shape")
         print(backbone_shape)
 
-        self.detector = self.EfficientDet(cfg)
+        self.detector = EfficientDet(cfg)
         self.mask = build_roi_heads(cfg, backbone_shape)
 
     def forward(self, batched_inputs):
