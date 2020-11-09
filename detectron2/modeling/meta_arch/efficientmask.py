@@ -27,6 +27,13 @@ class EfficientMask(nn.Module):
         self.detector = EfficientDet(cfg)
         self.mask = build_roi_heads(cfg, backbone_shape)
 
+    @property
+    def device(self):
+        if torch.cuda.is_available():
+            return torch.device("cuda")
+        else:
+            return torch.device("cpu")
+
     def forward(self, batched_inputs):
         self.detector.eval()
         with torch.no_grad():
