@@ -9,16 +9,9 @@ The behavior of functions/classes in this file is subject to change,
 since they are meant to represent the "common default behavior" people need in their projects.
 """
 
-import argparse
-import logging
 import os
-import sys
-from collections import OrderedDict
 import torch
 import numpy as np
-from fvcore.common.file_io import PathManager
-from fvcore.nn.precise_bn import get_bn_modules
-from torch.nn.parallel import DistributedDataParallel
 
 from detectron2.data import DatasetMapper
 import detectron2.data.transforms as T
@@ -28,12 +21,7 @@ from detectron2.data import (
     build_detection_test_loader,
     build_detection_train_loader,
 )
-from detectron2.evaluation import (
-    DatasetEvaluator,
-    inference_on_dataset,
-    print_csv_format,
-    verify_results,
-)
+
 from detectron2.evaluation import (
     CityscapesInstanceEvaluator,
     CityscapesSemSegEvaluator,
@@ -46,21 +34,13 @@ from detectron2.evaluation import (
     verify_results,
 )
 from detectron2.modeling import build_model
-from detectron2.solver import build_lr_scheduler, build_optimizer
 from detectron2.utils import comm
-from detectron2.utils.collect_env import collect_env_info
-from detectron2.utils.env import seed_all_rng
-from detectron2.utils.events import CommonMetricPrinter, JSONWriter, TensorboardXWriter
-from detectron2.utils.logger import setup_logger
 from detectron2.engine.defaults import default_argument_parser, default_setup, DefaultTrainer, DefaultPredictor
 
 from detectron2.data.transforms.augmentation import Augmentation
 from detectron2.data.transforms.augmentation_impl import ResizeShortestEdge
 from detectron2.data.transforms.transform import ResizeTransform, TransformList, NoOpTransform
 from PIL import Image
-from fvcore.transforms.transform import Transform
-from . import hooks
-from .train_loop import SimpleTrainer
 
 __all__ = ["PaddingTransform", "ResizeWithPadding", "Predictor", "Trainer"]
 

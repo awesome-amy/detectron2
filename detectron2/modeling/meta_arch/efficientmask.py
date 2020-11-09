@@ -5,6 +5,7 @@ from detectron2.modeling.roi_heads import build_roi_heads
 from ..backbone import build_backbone
 from ..postprocessing import detector_postprocess
 from .build import META_ARCH_REGISTRY
+from detectron2.layers.shape_spec import ShapeSpec
 
 __all__ = ["EfficientMask"]
 
@@ -17,11 +18,11 @@ class EfficientMask(nn.Module):
 
     def __init__(self, cfg):
         super().__init__()
-        # TODO: get shape directly without building backbone
-        self.backbone = build_backbone(cfg)
-        backbone_shape = self.backbone.output_shape()
-        print("backbone_shape")
-        print(backbone_shape)
+        backbone_shape = {'p3': ShapeSpec(channels=64, height=None, width=None, stride=8),
+                          'p4': ShapeSpec(channels=64, height=None, width=None, stride=16),
+                          'p5': ShapeSpec(channels=64, height=None, width=None, stride=32),
+                          'p6': ShapeSpec(channels=64, height=None, width=None, stride=64),
+                          'p7': ShapeSpec(channels=64, height=None, width=None, stride=128)}
 
         self.detector = EfficientDet(cfg)
         self.mask = build_roi_heads(cfg, backbone_shape)
@@ -43,13 +44,10 @@ class EfficientMask(nn.Module):
             results, _ = self.mask(images, features_dict, detections)
 
             for results_per_image, input_per_image, image_size in zip(
-                results, batched_inputs, images.image_sizes
+                    results, batched_inputs, images.image_sizes
             ):
                 height = input_per_image.get("height", image_size[0])
                 width = input_per_image.get("width", image_size[1])
                 r = detector_postprocess(results_per_image, height, width)
                 processed_results.append({"instances": r})
             return processed_results
-
-
-
